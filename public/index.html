@@ -1666,14 +1666,7 @@
           <input type="text" class="search-input" id="modelsSearch" data-i18n-placeholder="models.search" placeholder="Search models...">
         </div>
       </div>
-      <div id="modelsQuotaTotal" class="card quota-total-card">
-        <div class="label" data-i18n="invoke.total_quota">总剩余</div>
-        <div class="quota-total-bar-wrap">
-          <div class="quota-bar" style="max-width: 200px;"><div class="quota-fill" id="modelsTotalQuotaBar" style="width: 0;"></div></div>
-          <span class="value" id="modelsTotalQuotaValue">—</span>
-        </div>
-        <div class="hint" data-i18n="models.total_hint">各账号单独计算，未使用显示 100%</div>
-      </div>
+
       <div class="table-wrap">
         <table id="modelsTable">
           <thead>
@@ -2829,7 +2822,8 @@
             }
             imgHtml = imgStr ? '<span class="models-account-used" style="color:' + imgColor + ';">' + escapeHtml(imgStr) + '</span>' : '';
           }
-          return '<div class="models-account-row"><div class="models-account-info"><span class="models-account-name">' + escapeHtml(name) + '</span>' + usedHtml + imgHtml + '</div><div class="quota-bar-wrap"><div class="quota-bar"><div class="quota-fill ' + fillClass + '" style="width:' + pct + '%"></div></div></div><span class="models-account-quota">' + pct + '%</span></div>';
+          var pctColor = fillClass === 'empty' ? 'var(--danger)' : (fillClass === 'low' ? 'var(--neon-yellow)' : 'var(--success)');
+          return '<div class="models-account-row"><div class="models-account-info"><span class="models-account-name">' + escapeHtml(name) + '</span>' + usedHtml + imgHtml + '</div><span class="models-account-quota" style="font-weight:600;color:' + pctColor + ';">' + pct + '%</span></div>';
         }).join('') : '<div class="models-account-row" style="color:var(--text-muted);">' + (locale === 'zh' ? '暂无账号' : 'No accounts') + '</div>';
         return '<tr data-model="' + escapeHtml(modelId) + '"><td class="field-highlight">' + escapeHtml(modelId) + '</td><td class="field-highlight">' + accountList + '</td></tr>';
       }).join('');
@@ -2898,6 +2892,72 @@
       loadLogs();
     }, 5000);
   
+
+    // ── 代理池管理 ──
+    async function refreshProxyList() {
+      try {
+        var r = await fetch('/api/proxies');
+        var d = await r.json();
+        var el = document.getElementById('proxyListContainer');
+        el.innerHTML = d.proxies && d.proxies.length
+          ? d.proxies.map(function(p) {
+              return '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--border);"><code style="font-size:11px;">' + escapeHtml(p.url) + '</code><button class="btn btn-sm" style="color:var(--danger);" onclick="delProxy(\'' + p.id + '\')">删除</button></div>';
+            }).join('')
+          : '<span style="color:var(--text-muted);">暂无代理</span>';
+      } catch(e) {}
+    }
+    async function addProxies() {
+      var t = document.getElementById('proxyPoolInput').value.trim();
+      if (!t) return;
+      try {
+        var r = await fetch('/api/proxies', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({urls:t}) });
+        var d = await r.json();
+        document.getElementById('proxyPoolInput').value = '';
+        refreshProxyList();
+      } catch(e) {}
+    }
+    async function autoAssignProxies() {
+      try {
+        var r = await fetch('/api/proxies/assign', { method: 'POST' });
+        var d = await r.json();
+        alert('已分配 ' + d.assigned + ' 个账号到 ' + d.proxies + ' 个代理');
+      } catch(e) {}
+    }
+    async function delProxy(id) {
+      await fetch('/api/proxies/' + id, { method: 'DELETE' });
+      refreshProxyList();
+    }
+    function manualAssignProxy() {
+      Promise.all([
+        fetch('/api/accounts').then(function(r){return r.json()}),
+        fetch('/api/proxies').then(function(r){return r.json()})
+      ]).then(function(results) {
+        var accts = results[0].accounts || [];
+        var proxies = results[1].proxies || [];
+        if (!accts.length) { alert('没有账号'); return; }
+        if (!proxies.length) { alert('代理池为空'); return; }
+        var acctOpts = accts.map(function(a,i){ return (i+1)+'. '+(a.name||('账号'+(i+1))); }).join('\n');
+        var idx = prompt('选择账号（输入序号）:\n' + acctOpts);
+        if (idx == null) return;
+        idx = parseInt(idx) - 1;
+        if (isNaN(idx) || idx < 0 || idx >= accts.length) { alert('无效序号'); return; }
+        var proxyOpts = proxies.map(function(p,i){ return (i+1)+'. '+p.url; }).join('\n');
+        var pi = prompt('选择代理（输入序号）:\n' + proxyOpts);
+        if (pi == null) return;
+        pi = parseInt(pi) - 1;
+        if (isNaN(pi) || pi < 0 || pi >= proxies.length) { alert('无效序号'); return; }
+        fetch('/api/proxies/assign-one', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({index:idx, proxy:proxies[pi].url})
+        }).then(function(r){return r.json()}).then(function(d){
+          alert(d.ok ? '已分配' : (d.error||'失败'));
+          loadList();
+        });
+      });
+    }
+    refreshProxyList();
+
     // ── 主题切换 ──
     (function() {
       var html = document.documentElement;
