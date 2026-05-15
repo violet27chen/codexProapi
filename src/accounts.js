@@ -22,11 +22,14 @@ export function listAccountsForApi() {
   return {
     accounts: list.map((item, index) => {
       const accountId = item.account_id || item.tokens?.account_id || '';
+      const rawProxy = item.proxy || '';
+      const displayProxy = rawProxy ? rawProxy.replace(/:\/\/([^:]*):[^@]*@/, '://$1:***@').replace(/:\/\/([^@]*)@/, '://$1@') : '';
       return {
         index,
         name: item.name || `账号 ${index + 1}`,
         accountIdMask: accountId ? `${accountId.slice(0, 8)}…` : '—',
         source: item.source || 'manual',
+        proxy: displayProxy,
       };
     }),
   };
@@ -50,6 +53,7 @@ export function loadAccountsForProxy() {
         accessToken: tokens.access_token,
         accountId: tokens.account_id,
         name: item.name || null,
+        proxy: item.proxy || null,
       });
     }
   }
@@ -78,6 +82,7 @@ export function addAccount(body) {
       name: body.name || null,
       access_token: body.access_token,
       account_id: body.account_id,
+      refresh_token: body.refresh_token || undefined,
       source: body.source || 'manual',
     };
   } else {

@@ -42,6 +42,58 @@
       --font-display: 'Orbitron', sans-serif;
       --font-body: 'Rajdhani', system-ui, sans-serif;
     }
+    [data-theme="light"] {
+      --bg: #050508;
+      --bg-elevated: #0a0a12;
+      --surface: #0d0d18;
+      --surface-soft: #12121f;
+      --surface-hover: #1a1a2e;
+      --border: rgba(0,245,255,0.12);
+      --border-strong: rgba(0,245,255,0.25);
+      --text: #e8e8f0;
+      --text-muted: #8892a8;
+      --accent: #00f5ff;
+      --accent-hover: #5cffff;
+      --accent-muted: rgba(0,245,255,0.15);
+      --accent-soft: rgba(0,245,255,0.06);
+      --neon-pink: #ff00ff;
+      --neon-pink-muted: rgba(255,0,255,0.2);
+      --neon-yellow: #ffb800;
+      --danger: #ff3366;
+      --danger-muted: rgba(255,51,102,0.2);
+      --success: #00ff88;
+      --success-muted: rgba(0,255,136,0.15);
+      --shadow: 0 8px 32px rgba(0,0,0,0.5);
+      --shadow-sm: 0 2px 16px rgba(0,0,0,0.3);
+      --shadow-glow: 0 0 40px rgba(0,245,255,0.15), 0 0 80px rgba(0,245,255,0.05);
+      --glow-cyan: 0 0 20px rgba(0,245,255,0.4);
+    }
+    [data-theme="light"] {
+      --bg: #ffffff;
+      --bg-elevated: #f8f9fa;
+      --surface: #ffffff;
+      --surface-soft: #f3f4f6;
+      --surface-hover: #e5e7eb;
+      --border: #e5e7eb;
+      --border-strong: #d1d5db;
+      --text: #1a1a2e;
+      --text-muted: #6b7280;
+      --accent: #2563eb;
+      --accent-hover: #1d4ed8;
+      --accent-muted: rgba(37,99,235,0.1);
+      --accent-soft: rgba(37,99,235,0.05);
+      --neon-pink: #2563eb;
+      --neon-pink-muted: rgba(37,99,235,0.1);
+      --neon-yellow: #f59e0b;
+      --danger: #dc2626;
+      --danger-muted: rgba(220,38,38,0.1);
+      --success: #16a34a;
+      --success-muted: rgba(22,163,74,0.1);
+      --shadow: 0 1px 3px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06);
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+      --shadow-glow: 0 0 20px rgba(37,99,235,0.08);
+      --glow-cyan: 0 0 12px rgba(37,99,235,0.15);
+    }
     * { box-sizing: border-box; }
     :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; box-shadow: 0 0 12px var(--accent-muted); }
     @media (prefers-reduced-motion: reduce) {
@@ -61,9 +113,6 @@
       overflow-x: hidden;
     }
     body::before {
-      content: '';
-      position: fixed;
-      inset: 0;
       background:
         linear-gradient(180deg, transparent 0%, rgba(0,245,255,0.02) 50%, transparent 100%),
         radial-gradient(ellipse 120% 80% at 20% 10%, rgba(0,245,255,0.08) 0%, transparent 50%),
@@ -177,6 +226,26 @@
       align-items: center;
       border-top: 1px solid var(--border);
     }
+
+    .theme-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--text-muted);
+      cursor: pointer;
+      font-family: var(--font-body);
+      font-size: 13px;
+      font-weight: 600;
+      transition: all 0.2s;
+      margin-top: 12px;
+    }
+    .theme-toggle:hover { color: var(--accent); border-color: var(--accent); }
+    .theme-toggle svg { width: 16px; height: 16px; }
+
     .sidebar-footer a {
       color: var(--text-muted);
       font-size: 13px;
@@ -1671,6 +1740,7 @@
         <button type="button" class="invoke-nav-btn" data-invoke="health">GET /health</button>
         <button type="button" class="invoke-nav-btn" data-invoke="models">GET /v1/models</button>
         <button type="button" class="invoke-nav-btn" data-invoke="chat">POST /v1/chat/completions</button>
+        <button type="button" class="invoke-nav-btn" data-invoke="image">POST /v1/images/generations</button>
       </nav>
       <div class="doc-content" id="invokeDocContent">
         <section id="invoke-panel-base" class="invoke-panel active">
@@ -1692,6 +1762,11 @@
           <h2 class="doc-h2">POST /v1/chat/completions</h2>
           <p class="doc-p" data-i18n="invoke.chat_desc">对话补全，与 OpenAI Chat Completions 兼容，支持 stream。</p>
           <div id="docChatCmds"></div>
+        </section>
+        <section id="invoke-panel-image" class="invoke-panel">
+          <h2 class="doc-h2">POST /v1/images/generations</h2>
+          <p class="doc-p" data-i18n="invoke.image_desc">图像生成，底层使用 f/conversation picture_v2 协议。返回代理 URL，浏览器可直接查看。</p>
+          <div id="docImageCmds"></div>
         </section>
       </div>
     </div>
@@ -1783,7 +1858,7 @@
             </div>
             <div class="hint" style="padding-top: 0;" data-i18n="settings.api_hint">在客户端中请填写上述地址（须含 /v1）。</div>
             <div class="label" style="margin-top: 14px;" data-i18n="settings.model_label">推荐模型</div>
-            <code class="settings-model-pill">gpt-5.3-codex</code>
+            <code class="settings-model-pill">gpt-5.5 / gpt-5.4</code>
           </div>
           <div class="card" style="max-width: 100%;">
             <h3 class="settings-section-title" data-i18n="settings.section_links">常用链接</h3>
@@ -1857,7 +1932,7 @@
     })();
     const API = '';
     const STORAGE_LOCALE = 'codex-proapi-locale';
-    const MODEL_IDS = ['gpt-5.3-codex', 'gpt-5.2-codex', 'gpt-5-codex', 'gpt-5', 'gpt-4'];
+    const MODEL_IDS = ['gpt-5.5', 'gpt-5.4', 'gpt-5.4-mini', 'gpt-5.3-codex', 'gpt-5.2-codex', 'gpt-5-codex', 'gpt-5', 'gpt-image-2', 'gpt-4'];
     const DASH_MAX_POINTS = 10;
     let usageHistory = [];
     let dashChartInstance = null;
@@ -2035,6 +2110,7 @@
         'invoke.health_desc': '健康检查，返回服务状态。',
         'invoke.models_desc': '返回可用模型列表（OpenAI 格式）。',
         'invoke.chat_desc': '对话补全，与 OpenAI Chat Completions 兼容，支持 stream。',
+        'invoke.image_desc': '图像生成，底层使用 f/conversation picture_v2 协议。返回代理 URL，浏览器可直接查看。',
         'invoke.curl_win': 'curl (Windows)',
         'invoke.curl_linux': 'curl (Linux / macOS)',
         'invoke.python': 'Python (openai)',
@@ -2166,6 +2242,7 @@
         'invoke.health_desc': 'Health check, returns service status.',
         'invoke.models_desc': 'Returns available models list (OpenAI format).',
         'invoke.chat_desc': 'Chat completions, OpenAI-compatible, supports stream.',
+        'invoke.image_desc': 'Image generation via f/conversation picture_v2 protocol. Returns proxy URL for direct browser viewing.',
         'invoke.curl_win': 'curl (Windows)',
         'invoke.curl_linux': 'curl (Linux / macOS)',
         'invoke.python': 'Python (openai)',
@@ -2582,8 +2659,8 @@
       const health = origin + '/health';
       const modelsUrl = apiBase + '/models';
       const chatUrl = apiBase + '/chat/completions';
-      const chatBodyWin = '{\\"model\\": \\"gpt-5.3-codex\\", \\"messages\\": [{\\"role\\": \\"user\\", \\"content\\": \\"Hello\\"}]}';
-      const chatBodyLinux = '{"model": "gpt-5.3-codex", "messages": [{"role": "user", "content": "Hello"}]}';
+      const chatBodyWin = '{\\"model\\": \\"gpt-5.4\\", \\"messages\\": [{\\"role\\": \\"user\\", \\"content\\": \\"Hello\\"}]}';
+      const chatBodyLinux = '{"model": "gpt-5.4", "messages": [{"role": "user", "content": "Hello"}]}';
       function block(labelKey, rawCode, lang) {
         const code = escapeHtml(rawCode);
         return '<div class="doc-cmd-block"><div class="doc-cmd-label" data-i18n="' + labelKey + '">' + t(labelKey) + '</div><pre class="doc-pre language-' + lang + '"><code class="language-' + lang + '">' + code + '</code></pre></div>';
@@ -2606,13 +2683,26 @@
       }
       const chatCmds = document.getElementById('docChatCmds');
       if (chatCmds) {
-        const multiTurnPy = 'from openai import OpenAI\n\nclient = OpenAI(base_url="' + apiBase + '", api_key="sk-")\nr = client.chat.completions.create(\n    model="gpt-5.3-codex",\n    messages=[\n        {"role": "user", "content": "记住这个数字：42"},\n        {"role": "assistant", "content": "好的，我记住了 42。"},\n        {"role": "user", "content": "我刚刚让你记住的数字是多少？只回答数字。"}\n    ]\n)\nprint(r.choices[0].message.content)';
+        const multiTurnPy = 'from openai import OpenAI\n\nclient = OpenAI(base_url="' + apiBase + '", api_key="sk-")\nr = client.chat.completions.create(\n    model="gpt-5.4",\n    messages=[\n        {"role": "user", "content": "记住这个数字：42"},\n        {"role": "assistant", "content": "好的，我记住了 42。"},\n        {"role": "user", "content": "我刚刚让你记住的数字是多少？只回答数字。"}\n    ]\n)\nprint(r.choices[0].message.content)';
         chatCmds.innerHTML =
           block('invoke.curl_win', 'curl -X POST "' + chatUrl + '" ^\n  -H "Content-Type: application/json" ^\n  -d "' + chatBodyWin + '"', 'bash') +
           block('invoke.curl_linux', "curl -X POST '" + chatUrl + "' \\\n  -H 'Content-Type: application/json' \\\n  -d '" + chatBodyLinux + "'", 'bash') +
-          block('invoke.python', 'from openai import OpenAI\n\nclient = OpenAI(\n    base_url="' + apiBase + '",\n    api_key="sk-"\n)\nr = client.chat.completions.create(\n    model="gpt-5.3-codex",\n    messages=[{"role": "user", "content": "Hello"}]\n)\nprint(r)', 'python') +
-          block('invoke.nodejs', 'import OpenAI from "openai";\n\nconst client = new OpenAI({\n  baseURL: "' + apiBase + '",\n  apiKey: "sk-"\n});\nconst r = await client.chat.completions.create({\n  model: "gpt-5.3-codex",\n  messages: [{ role: "user", content: "Hello" }]\n});\nconsole.log(r);', 'javascript') +
+          block('invoke.python', 'from openai import OpenAI\n\nclient = OpenAI(\n    base_url="' + apiBase + '",\n    api_key="sk-"\n)\nr = client.chat.completions.create(\n    model="gpt-5.4",\n    messages=[{"role": "user", "content": "Hello"}]\n)\nprint(r)', 'python') +
+          block('invoke.nodejs', 'import OpenAI from "openai";\n\nconst client = new OpenAI({\n  baseURL: "' + apiBase + '",\n  apiKey: "sk-"\n});\nconst r = await client.chat.completions.create({\n  model: "gpt-5.4",\n  messages: [{ role: "user", content: "Hello" }]\n});\nconsole.log(r);', 'javascript') +
           '<div class="doc-section" style="margin-top:24px"><h3 class="doc-h2" data-i18n="invoke.chat_multi_turn">' + (t('invoke.chat_multi_turn') || '多轮对话示例') + '</h3><div class="doc-cmd-block"><pre class="doc-pre language-python"><code class="language-python">' + escapeHtml(multiTurnPy) + '</code></pre></div></div>';
+      }
+      const imageCmds = document.getElementById('docImageCmds');
+      if (imageCmds) {
+        const imageUrl = apiBase + '/images/generations';
+        const imgBodyWin = '{\\"model\\": \\"gpt-image-2\\", \\"prompt\\": \\"a cute cat\\", \\"n\\": 1, \\"size\\": \\"1024x1024\\"}';
+        const imgBodyLinux = '{"model": "gpt-image-2", "prompt": "a cute cat", "n": 1, "size": "1024x1024"}';
+        const imgPython = 'from openai import OpenAI\n\nclient = OpenAI(\n    base_url="' + apiBase + '",\n    api_key="sk-"\n)\nr = client.images.generate(\n    model="gpt-image-2",\n    prompt="a cute cat",\n    n=1,\n    size="1024x1024"\n)\nprint(r.data[0].b64_json)';
+        const imgNode = 'import OpenAI from "openai";\n\nconst client = new OpenAI({\n  baseURL: "' + apiBase + '",\n  apiKey: "sk-"\n});\nconst r = await client.images.generate({\n  model: "gpt-image-2",\n  prompt: "a cute cat",\n  n: 1,\n  size: "1024x1024"\n});\nconsole.log(r.data[0].b64_json);';
+        imageCmds.innerHTML =
+          block('invoke.curl_win', 'curl -X POST "' + imageUrl + '" ^\n  -H "Content-Type: application/json" ^\n  -d "' + imgBodyWin + '"', 'bash') +
+          block('invoke.curl_linux', "curl -X POST '" + imageUrl + "' \\\n  -H 'Content-Type: application/json' \\\n  -d '" + imgBodyLinux + "'", 'bash') +
+          block('invoke.python', imgPython, 'python') +
+          block('invoke.nodejs', imgNode, 'javascript');
       }
       if (typeof Prism !== 'undefined') {
         document.querySelectorAll('#invokeDocContent pre code[class*="language-"]').forEach(function (el) { if (window.Prism && typeof Prism.highlightElement === 'function') Prism.highlightElement(el); });
@@ -2690,6 +2780,25 @@
         const u = usageList.find(function(a) { return a.index === i; });
         return (u && typeof u.used_tokens === 'number') ? u.used_tokens : null;
       };
+      const getImgRemaining = (i) => {
+        const u = usageList.find(function(a) { return a.index === i; });
+        return (u && typeof u.image_remaining === 'number') ? u.image_remaining : null;
+      };
+      const isImgExhausted = (i) => {
+        const u = usageList.find(function(a) { return a.index === i; });
+        return !!(u && u.image_exhausted);
+      };
+      const getQuotaTokens = (i) => {
+        const u = usageList.find(function(a) { return a.index === i; });
+        return (u && typeof u.quota_tokens === 'number') ? u.quota_tokens : null;
+      };
+      // 图片模型的生图进度百分比
+      const getImgPct = (i) => {
+        const u = usageList.find(function(a) { return a.index === i; });
+        if (!u || u.image_remaining == null || u.image_limit == null) return null;
+        if (u.image_exhausted) return 0;
+        return Math.round((u.image_remaining / u.image_limit) * 100);
+      };
       const fmtTokens = (n) => n == null ? '' : (n >= 1000000 ? (n / 1000000).toFixed(1) + 'M' : n.toLocaleString());
       tbody.innerHTML = MODEL_IDS.map(modelId => {
         const accountList = list.length ? list.map((acc, i) => {
@@ -2697,9 +2806,30 @@
           const used = getUsed(i);
           const name = acc.name || t('accounts.account_n').replace('{n}', i + 1);
           const fillClass = pct <= 0 ? 'empty' : (pct <= 25 ? 'low' : '');
-          const usedStr = used != null ? (locale === 'zh' ? '已用 ' + fmtTokens(used) + ' token' : fmtTokens(used) + ' tokens used') : '';
+          // 对话额度
+          const quotaTk = getQuotaTokens(i);
+          const usedStr = used != null ? (locale === 'zh'
+            ? '对话已用 ' + fmtTokens(used) + ' / ' + fmtTokens(quotaTk || used) + ' token'
+            : 'Chat used ' + fmtTokens(used) + ' / ' + fmtTokens(quotaTk || used) + ' tokens') : '';
           const usedHtml = usedStr ? '<span class="models-account-used">' + escapeHtml(usedStr) + '</span>' : '';
-          return '<div class="models-account-row"><div class="models-account-info"><span class="models-account-name">' + escapeHtml(name) + '</span>' + usedHtml + '</div><div class="quota-bar-wrap"><div class="quota-bar"><div class="quota-fill ' + fillClass + '" style="width:' + pct + '%"></div></div></div><span class="models-account-quota">' + pct + '%</span></div>';
+          // 生图剩余次数
+          // 生图额度只在图片模型行显示
+          const isImageModel = modelId.startsWith('gpt-image');
+          let imgHtml = '';
+          if (isImageModel) {
+            const imgExhausted = isImgExhausted(i);
+            const imgR = getImgRemaining(i);
+            let imgStr = '';
+            let imgColor = 'var(--accent)';
+            if (imgExhausted) {
+              imgStr = locale === 'zh' ? '生图额度已用尽 (24h后重置)' : 'Img quota exhausted (reset 24h)';
+              imgColor = 'var(--danger)';
+            } else if (imgR != null) {
+              imgStr = locale === 'zh' ? '生图剩余 ' + imgR + ' 次' : 'Img: ' + imgR + ' left';
+            }
+            imgHtml = imgStr ? '<span class="models-account-used" style="color:' + imgColor + ';">' + escapeHtml(imgStr) + '</span>' : '';
+          }
+          return '<div class="models-account-row"><div class="models-account-info"><span class="models-account-name">' + escapeHtml(name) + '</span>' + usedHtml + imgHtml + '</div><div class="quota-bar-wrap"><div class="quota-bar"><div class="quota-fill ' + fillClass + '" style="width:' + pct + '%"></div></div></div><span class="models-account-quota">' + pct + '%</span></div>';
         }).join('') : '<div class="models-account-row" style="color:var(--text-muted);">' + (locale === 'zh' ? '暂无账号' : 'No accounts') + '</div>';
         return '<tr data-model="' + escapeHtml(modelId) + '"><td class="field-highlight">' + escapeHtml(modelId) + '</td><td class="field-highlight">' + accountList + '</td></tr>';
       }).join('');
@@ -2767,6 +2897,35 @@
       loadList();
       loadLogs();
     }, 5000);
-  </script>
+  
+    // ── 主题切换 ──
+    (function() {
+      var html = document.documentElement;
+      var btn = document.getElementById('themeToggle');
+      var icon = document.getElementById('themeIcon');
+      var label = document.getElementById('themeLabel');
+      var isLight = html.getAttribute('data-theme') === 'light';
+
+      function setTheme(light) {
+        html.setAttribute('data-theme', light ? 'light' : 'dark');
+        if (icon) icon.innerHTML = light
+          ? '<circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>'
+          : '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+        if (label) label.textContent = light ? '深色模式' : '浅色模式';
+        try { localStorage.setItem('codex-theme', light ? 'light' : 'dark'); } catch(_) {}
+      }
+
+      if (btn) {
+        btn.addEventListener('click', function() {
+          var next = html.getAttribute('data-theme') !== 'light';
+          setTheme(next);
+        });
+      }
+
+      // 初始化图标
+      setTheme(isLight);
+    })();
+
+</script>
 </body>
 </html>

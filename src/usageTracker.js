@@ -32,7 +32,6 @@ function save(state) {
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
     writeFileSync(USAGE_FILE, JSON.stringify(state, null, 2), 'utf8');
   } catch (e) {
-    console.error('usageTracker save failed:', e.message);
   }
 }
 
@@ -85,3 +84,79 @@ export function getRemainingPct(accountId) {
 }
 
 export { QUOTA };
+
+
+// ── 生图额度追踪（从 chatRequirements limits_progress 获取）──
+
+const imageQuotaMap = new Map(); // accountId → { remaining, limit, resetAfter }
+
+/**
+ * 更新指定账号的真实生图额度（由 imagegen.js 在 chatRequirements 后调用）
+ */
+export function updateImageQuota(accountId, remaining, limit, resetAfter) {
+  if (!accountId) return;
+  imageQuotaMap.set(String(accountId), {
+    remaining: Number(remaining) || 0,
+    limit: Number(limit) || 0,
+    resetAfter: resetAfter || null,
+    updatedAt: Date.now(),
+  });
+}
+
+/**
+ * 获取指定账号的真实生图额度
+ */
+export function getImageQuota(accountId) {
+  const q = imageQuotaMap.get(String(accountId));
+  if (!q) return null;
+  return { ...q };
+}
+
+/**
+ * 获取所有账号的生图额度汇总
+ */
+export function getAllImageQuotas() {
+  const result = {};
+  for (const [id, q] of imageQuotaMap) {
+    result[id] = { ...q };
+  }
+  return result;
+}
+
+// ── 本地生图额度追踪（因 chatRequirements 不返回 limits_progress）──
+
+const DEFAULT_IMAGE_DAILY_QUOTA = Number(process.env.IMAGE_DAILY_QUOTA) || 5;
+let dailyImageCount = {}; // { accountId: { date: 'YYYY-MM-DD', count: N } }
+
+/**
+ * 记录一次生图成功，返回剩余次数
+ */
+export function recordImageUsage(accountId) {
+  if (!accountId) return { remaining: null, limit: DEFAULT_IMAGE_DAILY_QUOTA };
+  const id = String(accountId);
+  const today = new Date().toISOString().slice(0, 10);
+  dailyImageCount = loadImageUsage();
+  const entry = dailyImageCount[id];
+  if (!entry || entry.date !== today) {
+    dailyImageCount[id] = { date: today, count: 1 };
+  } else {
+    entry.count++;
+  }
+  saveImageUsage(dailyImageCount);
+  const used = dailyImageCount[id].count;
+  return { remaining: Math.max(0, DEFAULT_IMAGE_DAILY_QUOTA - used), limit: DEFAULT_IMAGE_DAILY_QUOTA, used };
+}
+
+/**
+ * 获取指定账号的本地生图剩余次数
+ */
+export function getLocalImageQuota(accountId) {
+  if (!accountId) return null;
+  const id = String(accountId);
+  const today = new Date().toISOString().slice(0, 10);
+  const entry = dailyImageCount[id];
+  if (!entry || entry.date !== today) {
+    return { remaining: DEFAULT_IMAGE_DAILY_QUOTA, limit: DEFAULT_IMAGE_DAILY_QUOTA, used: 0 };
+  }
+  return { remaining: Math.max(0, DEFAULT_IMAGE_DAILY_QUOTA - entry.count), limit: DEFAULT_IMAGE_DAILY_QUOTA, used: entry.count };
+}

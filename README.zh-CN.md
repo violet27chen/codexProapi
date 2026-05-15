@@ -1,6 +1,6 @@
 # Codex Pro API
 
-将 **Codex**（gpt-5.3-codex）以 **OpenAI 兼容 API** 形式暴露，可在 Cline、Cursor 等支持 OpenAI 接口的客户端中使用。
+将 **Codex**（gpt-5.5、gpt-5.4、gpt-5.4-mini、gpt-5.3-codex、gpt-image-2 等）以 **OpenAI 兼容 API** 形式暴露，可在 Cline、Cursor 等支持 OpenAI 接口的客户端中使用。支持**文本对话**（`/v1/chat/completions`）和**图像生成**（`/v1/images/generations`）。
 
 **For English, see [README.md](README.md).**
 
@@ -59,7 +59,7 @@ codex-proapi
 | 配置项     | 填写内容 |
 |------------|----------|
 | **Base URL** | `http://localhost:1455/v1`（须含 `/v1`；若使用远程或其它端口，请改为对应地址 + `/v1`） |
-| **模型**     | `gpt-5.3-codex`（或 `gpt-5.2-codex`、`gpt-5-codex`、`gpt-5`、`gpt-4`） |
+| **模型**     | `gpt-5.4` 或 `gpt-5.5`（全部：`gpt-5.5`、`gpt-5.4`、`gpt-5.4-mini`、`gpt-5.3-codex`、`gpt-5.2-codex`、`gpt-5-codex`、`gpt-5`、`gpt-image-2`、`gpt-4`） |
 | **API Key**  | 任意填写（不校验；认证来自您已配置的 Codex 账号） |
 
 **操作步骤：**
@@ -119,6 +119,24 @@ codex-proapi
 - **中英双语** — 界面与日志支持英文与简体中文。
 
 本服务支持多轮对话；在客户端按 OpenAI 格式传 `messages` 即可，代理会自动处理。
+
+### 图像生成
+
+通过 `POST /v1/images/generations` 支持图像生成（OpenAI 兼容格式），底层使用 `f/conversation` 协议的 `picture_v2` 通路。支持的模型：`gpt-image-2`（默认）、`gpt-image-1.5`、`gpt-image-1`、`gpt-image-1-mini`。返回**代理 URL**（浏览器可直接打开），缓存有效期 30 分钟。
+
+```bash
+curl -X POST http://localhost:1455/v1/images/generations \
+  -H "Content-Type: application/json" \
+  -d '{"model":"gpt-image-2","prompt":"一只猫","n":1,"size":"1024x1024"}'
+```
+
+参数：`model`、`prompt`、`n`（1–10）、`size`、`quality`（low/medium/high/auto）、`output_format`（png/jpeg/webp）、`background`、`moderation`。
+
+返回格式（OpenAI 兼容，返回代理 URL）：
+```json
+{"created": 1715808000, "data": [{"url": "http://localhost:1455/p/img/abc123..."}]}
+```
+浏览器直接打开 URL 即可查看生成的图像。
 
 ---
 

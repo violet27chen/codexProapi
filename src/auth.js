@@ -1,4 +1,6 @@
 import { readFileSync } from 'fs';
+import { isAccountUnavailable, isImageQuotaExhausted } from './accountStatus.js';
+import { getUsedTokens } from './usageTracker.js';
 import { homedir } from 'os';
 import { resolve } from 'path';
 
@@ -60,11 +62,37 @@ export function parseAuthFromJson(data) {
 }
 
 /**
- * 创建轮询 getter：每次调用返回下一个账号
+ * 创建负载均衡 getter：
+ * 1. 跳过不可用账号（401/403 标记的）和生图额度耗尽账号（24h 自动重置）
+ * 2. 在可用账号中选择使用量最少的
+ * 3. 全部不可用时回退到简单轮询
  */
 export function createRoundRobinProvider(auths) {
-  let index = 0;
-  return () => auths[index++ % auths.length];
+  if (!auths || auths.length === 0) return () => null;
+
+  // 单账号直接返回
+  if (auths.length === 1) return () => auths[0];
+
+  return () => {
+    // 过滤不可用账号 + 生图额度耗尽账号
+    const available = auths.filter(a =>
+      !isAccountUnavailable(a.accountId) && !isImageQuotaExhausted(a.accountId));
+
+    // 全部不可用时回退到全部账号
+    const pool = available.length > 0 ? available : auths;
+
+    // 选使用量最少的
+    let best = pool[0];
+    let minUsed = Infinity;
+    for (const a of pool) {
+      const used = getUsedTokens(a.accountId);
+      if (used < minUsed) {
+        minUsed = used;
+        best = a;
+      }
+    }
+    return best;
+  };
 }
 
 export { resolveAuthPath, DEFAULT_AUTH_PATH };

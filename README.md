@@ -1,6 +1,6 @@
 # Codex Pro API
 
-Exposes **Codex** (gpt-5.3-codex) as an **OpenAI-compatible API** so you can use it in Cline, Cursor, or any client that supports OpenAI-style endpoints.
+Exposes **Codex** (gpt-5.5, gpt-5.4, gpt-5.4-mini, gpt-5.3-codex, gpt-image-2, and more) as an **OpenAI-compatible API** so you can use it in Cline, Cursor, or any client that supports OpenAI-style endpoints. Supports **text chat** (`/v1/chat/completions`) and **image generation** (`/v1/images/generations`).
 
 **中文说明请见 [README.zh-CN.md](README.zh-CN.md)。**
 
@@ -55,7 +55,7 @@ Or run `npm start` from the project directory after `npm install`. Then open **h
 | Setting     | Value |
 |------------|--------|
 | **Base URL** | `http://localhost:1455/v1` (must include `/v1`; or your host/port + `/v1`) |
-| **Model**    | `gpt-5.3-codex` (or `gpt-5.2-codex`, `gpt-5-codex`, `gpt-5`, `gpt-4`) |
+| **Model**    | `gpt-5.4` or `gpt-5.5` (see all: `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.3-codex`, `gpt-5.2-codex`, `gpt-5-codex`, `gpt-5`, `gpt-image-2`, `gpt-4`) |
 | **API Key**  | Any value (not validated; auth is from your Codex accounts) |
 
 **Steps:**
@@ -113,6 +113,24 @@ If you open the service via a link provided by someone else (e.g. `https://examp
 - **Bilingual** — Interface and logs in English and 简体中文.
 
 Multi-turn conversation is supported; send `messages` in the usual OpenAI format and the proxy will handle the rest.
+
+### Image generation
+
+Image generation is supported via `POST /v1/images/generations` (OpenAI-compatible), powered by the `f/conversation` protocol with `picture_v2` system hints. Supported models: `gpt-image-2` (default), `gpt-image-1.5`, `gpt-image-1`, `gpt-image-1-mini`. Images are returned as **proxy URLs** (browser-viewable) with a 30-minute cache.
+
+```bash
+curl -X POST http://localhost:1455/v1/images/generations \
+  -H "Content-Type: application/json" \
+  -d '{"model":"gpt-image-2","prompt":"a cat","n":1,"size":"1024x1024"}'
+```
+
+Parameters: `model`, `prompt`, `n` (1–10), `size`, `quality` (low/medium/high/auto), `output_format` (png/jpeg/webp), `background`, `moderation`.
+
+Response (OpenAI-compatible, returns proxy URL):
+```json
+{"created": 1715808000, "data": [{"url": "http://localhost:1455/p/img/abc123..."}]}
+```
+Open the URL directly in a browser to view the generated image.
 
 ---
 
