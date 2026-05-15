@@ -1,30 +1,7 @@
 import { randomUUID } from 'crypto';
-import { ProxyAgent } from 'undici';
 import { loadAuth } from './auth.js';
 import { markAccountUnavailable } from './accountStatus.js';
 import { recordUsage, clearUsage } from './usageTracker.js';
-import { generateImage } from './imagegen.js';
-
-
-// ── 代理分发 ────────────────────────────────────────────────
-
-const proxyAgentCache = new Map(); // url → ProxyAgent
-
-export function getProxyDispatcher(proxyUrl) {
-  if (!proxyUrl) return undefined;
-  if (proxyAgentCache.has(proxyUrl)) return proxyAgentCache.get(proxyUrl);
-  try {
-    const uri = new URL(proxyUrl);
-    const agent = new ProxyAgent({
-      uri: proxyUrl,
-      requestTls: { rejectUnauthorized: false },
-    });
-    proxyAgentCache.set(proxyUrl, agent);
-    return agent;
-  } catch (e) {
-    return undefined;
-  }
-}
 
 const BACKEND_URL = 'https://chatgpt.com/backend-api/codex/responses';
 
@@ -44,7 +21,7 @@ const BROWSER_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
 };
 
-function getMessageContentParts(msg) {
+async function getMessageContentParts(msg) {
   const content = [];
   const raw = msg.content;
   if (typeof raw === 'string') {
@@ -58,8 +35,20 @@ function getMessageContentParts(msg) {
       }
       if (typeof c !== 'object') continue;
       if (c.type === 'image_url' || c.image_url) {
-        const url = typeof c.image_url === 'string' ? c.image_url : (c.image_url?.url || '');
+        let url = typeof c.image_url === 'string' ? c.image_url : (c.image_url?.url || '');
         const detail = c.image_url?.detail || 'auto';
+        if (!url) continue;
+        // 外部 URL 下载转 base64（Codex 不支持外部 HTTP URL）
+        if (url.startsWith('http://') || url.startsWith('https://')) {
+          try {
+            const imgRes = await fetch(url, { signal: AbortSignal.timeout(15000) });
+            if (imgRes.ok) {
+              const buf = Buffer.from(await imgRes.arrayBuffer());
+              const mime = imgRes.headers.get('content-type') || 'image/jpeg';
+              url = `data:${mime};base64,${buf.toString('base64')}`;
+            }
+          } catch (_) {}
+        }
         if (url) content.push({ type: 'image_url', url, detail });
       } else if (c.type === 'text' || c.text != null) {
         const text = String(c.text ?? '').trim();
@@ -73,14 +62,14 @@ function getMessageContentParts(msg) {
   return content;
 }
 
-function messagesToInput(messages) {
+async function messagesToInput(messages) {
   const parts = [];
   let hasImage = false;
   const textLines = [];
 
   for (const msg of messages) {
     const role = String(msg.role || 'user').toLowerCase();
-    const contentParts = getMessageContentParts(msg);
+    const contentParts = await getMessageContentParts(msg);
     if (contentParts.length === 0) continue;
 
     const texts = contentParts.filter((p) => p.type === 'text').map((p) => p.text);
@@ -110,11 +99,11 @@ function messagesToInput(messages) {
 }
 
 /** 官方标准：约 4 字符 = 1 token，用于估算 prompt_tokens */
-function estimatePromptTokens(openaiReq) {
+async function estimatePromptTokens(openaiReq) {
   let chars = 0;
   const messages = openaiReq.messages || [];
   for (const msg of messages) {
-    const parts = getMessageContentParts(msg);
+    const parts = await getMessageContentParts(msg);
     for (const p of parts) {
       if (p.type === 'text' && p.text) chars += String(p.text).length;
     }
@@ -133,51 +122,41 @@ function estimatePromptTokens(openaiReq) {
  */
 /**
  * 规范化工具格式：将 OpenAI Chat Completions 旧格式 (function.name) 转为 Codex Responses 格式 (name)
- * 旧格式: { type: "function", function: { name: "...", description: "...", parameters: {...} } }
- * 新格式: { type: "function", name: "...", description: "...", parameters: {...} }
  */
 function normalizeTools(tools) {
   if (!Array.isArray(tools)) return [];
   return tools.map(t => {
     if (!t || typeof t !== 'object') return t;
-    // 已是新格式 (有 name 字段) 直接返回
     if (t.name) return t;
-    // 旧格式: function.name → name, function.description → description 等
     if (t.function && typeof t.function === 'object') {
       const f = t.function;
       const out = { type: t.type || 'function' };
       if (f.name) out.name = f.name;
       if (f.description) out.description = f.description;
       if (f.parameters) out.parameters = f.parameters;
-      if (f.strict !== undefined) out.strict = f.strict;
       return out;
     }
-    // 无法识别，原样返回
     return t;
   });
 }
 
-function buildResponsesRequest(openaiReq) {
-  const tools = normalizeTools(openaiReq.tools);
+async function buildResponsesRequest(openaiReq) {
+  const tools = normalizeTools(openaiReq.tools || []);
   const rawToolChoice = openaiReq.tool_choice;
   let tool_choice;
   if (tools.length === 0) {
     tool_choice = 'none';
   } else if (rawToolChoice === 'none' || rawToolChoice === 'auto' || rawToolChoice === 'required') {
     tool_choice = rawToolChoice;
-  } else if (rawToolChoice && typeof rawToolChoice === 'object') {
-    // 规范化 tool_choice：旧格式 { type, function: { name } } → { type, name }
-    if (rawToolChoice.function && rawToolChoice.function.name) {
-      tool_choice = { type: rawToolChoice.type || 'function', name: rawToolChoice.function.name };
-    } else if (rawToolChoice.type) {
-      tool_choice = rawToolChoice;
-    }
+  } else if (rawToolChoice && typeof rawToolChoice === 'object' && rawToolChoice.type) {
+    tool_choice = rawToolChoice;
+  } else {
+    tool_choice = 'auto';
   }
-  if (!tool_choice) tool_choice = 'auto';
   return {
     model: openaiReq.model || 'gpt-5.3-codex',
     instructions: 'You are a helpful AI assistant. Provide clear, accurate, and concise responses.',
-    input: messagesToInput(openaiReq.messages || []),
+    input: await messagesToInput(openaiReq.messages || []),
     tools,
     tool_choice,
     parallel_tool_calls: false,
@@ -306,7 +285,7 @@ export async function callCodexBackend(openaiReq, authProvider = null) {
   if (auth.type !== 'codex') {
     throw new Error('ChatGPT/Codex 反代需要 access_token + account_id，请使用 Codex 登录后的 auth.json');
   }
-  const body = buildResponsesRequest(openaiReq);
+  const body = await buildResponsesRequest(openaiReq);
   const sessionId = randomUUID();
   const headers = {
     ...BROWSER_HEADERS,
@@ -315,12 +294,10 @@ export async function callCodexBackend(openaiReq, authProvider = null) {
     'chatgpt-account-id': auth.accountId,
     'session_id': sessionId,
   };
-  const dispatcher = getProxyDispatcher(auth.proxy);
   const res = await fetch(BACKEND_URL, {
     method: 'POST',
     headers,
     body: JSON.stringify(body),
-    ...(dispatcher ? { dispatcher } : {}),
   });
   if (!res.ok) {
     const status = res.status;
@@ -415,46 +392,6 @@ export async function handleChatCompletions(openaiReq, res, authProvider = null,
         code: 'internal_error',
       },
     });
-  }
-  return null;
-}
-
-
-// ── 图像生成 ──
-// 调用 imagegen.generateImage() → chatgpt.com f/conversation 协议 → 返回代理 URL
-
-export async function handleImageGenerations(openaiReq, res, authProvider = null, accountCount = 1) {
-  const maxTries = Math.max(1, Number(accountCount) || 1);
-  let lastError = null;
-
-  for (let tryIndex = 0; tryIndex < maxTries; tryIndex++) {
-    try {
-      const auth = resolveAuth(typeof authProvider === 'function' ? authProvider() : authProvider);
-      if (!auth || auth.type !== 'codex') throw new Error('ChatGPT/Codex 反代需要 access_token + account_id');
-
-      const result = await generateImage(openaiReq, auth);
-      // 将 _token 替换为本地代理 URL
-      const proxyBase = `http://localhost:${process.env.PORT || 1455}`;
-      const out = {
-        created: result.created,
-        data: result.data.map(d => ({
-          url: d._token ? `${proxyBase}/p/img/${d._token}` : d.url,
-        })),
-      };
-      res.json(out);
-      return auth ?? null;
-    } catch (e) {
-      lastError = e;
-      if (res.headersSent) throw e;
-      const m = e.message && /^Chatgpt|chat-req|prepare|f\/conv|dl-url/.test(e.message);
-      if (!m || tryIndex >= maxTries - 1) break;
-    }
-  }
-
-  if (!res.headersSent) {
-    let msg = lastError?.message ?? 'Image generation error';
-    if (/^fetch failed/i.test(msg)) msg = 'fetch failed: 无法连接 chatgpt.com 生图后端';
-    res.status(500).json({ error: { message: msg, type: 'proxy_error', code: 'internal_error' } });
   }
   return null;
 }

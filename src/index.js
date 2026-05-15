@@ -1,11 +1,12 @@
+process.removeAllListeners('warning');
+process.on('warning', (w) => { if (w.name !== 'ExperimentalWarning') console.warn(w); });
+
 import express from 'express';
 import { join, dirname, resolve } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
-import { randomUUID } from 'crypto';
 import { loadAuth, createRoundRobinProvider } from './auth.js';
-import { handleChatCompletions, handleImageGenerations } from './proxy.js';
-import { getCachedImage, fetchImageBytes } from './imagegen.js';
+import { handleChatCompletions } from './proxy.js';
 import {
   listAccountsForApi,
   addAccount,
@@ -14,8 +15,8 @@ import {
   getAccountsPath,
 } from './accounts.js';
 import { getAuthorizeUrl, exchangeCodeForToken } from './oauth.js';
-import { isAccountUnavailable, isImageQuotaExhausted } from './accountStatus.js';
-import { getRemainingPct, getUsedTokens, getImageQuota, getLocalImageQuota, QUOTA } from './usageTracker.js';
+import { isAccountUnavailable } from './accountStatus.js';
+import { getRemainingPct, getUsedTokens, QUOTA } from './usageTracker.js';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const app = express();
@@ -100,18 +101,15 @@ app.use((req, res, next) => {
 try {
   const pkgPath = join(__dirname, '..', 'package.json');
   const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
-  
-app.get('/api/config', (req, res) => {
+  app.get('/api/config', (req, res) => {
   const cfg = loadConfig();
   res.json(cfg);
 });
-
 app.put('/api/config', (req, res) => {
   const { api_key } = req.body || {};
   saveConfig({ api_key: typeof api_key === 'string' ? api_key : '' });
   res.json({ ok: true });
 });
-
   app.get('/api/version', (req, res) => res.json({ version: pkg.version || '0.0.0' }));
 } catch {
   app.get('/api/version', (req, res) => res.json({ version: '0.0.0' }));
@@ -121,10 +119,9 @@ app.use(express.static(join(__dirname, '..', 'public')));
 
 const requestLogs = [];
 const MAX_LOGS = 200;
-const LOG_PATHS = ['/health', '/v1/models', '/v1/chat/completions', '/chat/completions', '/responses', '/v1/images/generations', '/api/accounts', '/api/proxies'];
+const LOG_PATHS = ['/health', '/v1/models', '/v1/chat/completions', '/chat/completions', '/responses'];
 
 app.use((req, res, next) => {
-  if (req.path === '/api/logs' || req.path === '/api/usage' || req.path === '/api/version' || req.path === '/api/config') return next();
   if (!LOG_PATHS.includes(req.path)) return next();
   const start = Date.now();
   res._logMeta = { time: new Date().toISOString(), method: req.method, path: req.path };
@@ -143,7 +140,7 @@ app.use((req, res, next) => {
   next();
 });
 
-const API_KEY_PATHS = ['/v1/models', '/v1/chat/completions', '/chat/completions', '/responses', '/v1/images/generations'];
+const API_KEY_PATHS = ['/v1/models', '/v1/chat/completions', '/chat/completions', '/responses'];
 app.use((req, res, next) => {
   if (!API_KEY_PATHS.includes(req.path)) return next();
   const cfg = loadConfig();
@@ -186,6 +183,7 @@ app.get('/auth/callback', async (req, res) => {
   const { code, state, error: oauthError, error_description: oauthDesc } = req.query;
   if (oauthError) {
     const msg = [oauthError, oauthDesc].filter(Boolean).join(': ');
+    console.error('OAuth error from provider:', msg);
     res.redirect(302, `/?oauth=error&msg=${encodeURIComponent(msg || 'oauth_error')}#/accounts`);
     return;
   }
@@ -194,11 +192,12 @@ app.get('/auth/callback', async (req, res) => {
     return;
   }
   try {
-    const { access_token, account_id, refresh_token, email } = await exchangeCodeForToken(code, redirectUri, state);
-    addAccount({ access_token, account_id, refresh_token: refresh_token || undefined, source: 'oauth', name: email || undefined });
+    const { access_token, account_id, email } = await exchangeCodeForToken(code, redirectUri, state);
+    addAccount({ access_token, account_id, source: 'oauth', name: email || undefined });
     refreshAuthProvider();
     res.redirect(302, '/?oauth=success');
   } catch (e) {
+    console.error('OAuth callback error:', e.message, '| redirect_uri:', redirectUri);
     res.redirect(302, `/?oauth=error&msg=${encodeURIComponent(e.message)}#/accounts`);
   }
 });
@@ -211,14 +210,10 @@ app.get('/v1/models', (req, res) => {
   res.json({
     object: 'list',
     data: [
-      { id: 'gpt-5.5', object: 'model', created: 1687882411, owned_by: 'openai' },
-      { id: 'gpt-5.4', object: 'model', created: 1687882411, owned_by: 'openai' },
-      { id: 'gpt-5.4-mini', object: 'model', created: 1687882411, owned_by: 'openai' },
       { id: 'gpt-5.3-codex', object: 'model', created: 1687882411, owned_by: 'openai' },
       { id: 'gpt-5.2-codex', object: 'model', created: 1687882411, owned_by: 'openai' },
       { id: 'gpt-5-codex', object: 'model', created: 1687882411, owned_by: 'openai' },
       { id: 'gpt-5', object: 'model', created: 1687882411, owned_by: 'openai' },
-      { id: 'gpt-image-2', object: 'model', created: 1687882411, owned_by: 'openai' },
       { id: 'gpt-4', object: 'model', created: 1687882411, owned_by: 'openai' },
     ],
   });
@@ -258,114 +253,6 @@ app.post('/responses', async (req, res) => {
   }
 });
 
-app.post('/v1/images/generations', async (req, res) => {
-  const { accounts } = listAccountsForApi();
-  const accountCount = accounts.length || 1;
-  const usedAuth = await handleImageGenerations(req.body, res, getAuthProvider, accountCount);
-  if (res._logMeta && usedAuth) {
-    const mask = usedAuth.accountId ? usedAuth.accountId.slice(0, 8) + '…' : '—';
-    const found = accounts.find((a) => a.accountIdMask === mask);
-    res._logMeta.account = found ? (found.name || `账号${found.index + 1}`) : mask;
-  }
-});
-
-// 图片代理端点 — 前端 <img src> 直接使用, 服务端从内存缓存取签名 URL 下载后返回 PNG
-app.get('/p/img/:token', async (req, res) => {
-  const entry = getCachedImage(req.params.token);
-  if (!entry) {
-    res.status(404).json({ error: { message: '图片已过期或不存在', code: 'not_found' } });
-    return;
-  }
-  try {
-    const imageBytes = await fetchImageBytes(
-      entry.signedURL, entry.authToken, entry.accountId, entry.deviceId, entry.sessionId);
-    const buf = Buffer.from(imageBytes, 'base64');
-    res.setHeader('Content-Type', 'image/png');
-    res.setHeader('Cache-Control', 'public, max-age=3600');
-    res.setHeader('Content-Length', buf.length);
-    res.end(buf);
-  } catch (e) {
-    res.status(502).json({ error: { message: '图片下载失败', code: 'proxy_error' } });
-  }
-});
-
-
-// ── 代理池管理 ──
-
-const proxiesPath = join(dirname(getAccountsPath()), 'proxies.json');
-function loadProxies() {
-  try { if (existsSync(proxiesPath)) return JSON.parse(readFileSync(proxiesPath, 'utf8')); } catch (_) {}
-  return [];
-}
-function saveProxies(list) {
-  const dir = dirname(proxiesPath);
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  writeFileSync(proxiesPath, JSON.stringify(list, null, 2), 'utf8');
-}
-
-app.get('/api/proxies', (req, res) => {
-  res.json({ proxies: loadProxies() });
-});
-
-app.post('/api/proxies', (req, res) => {
-  const { urls } = req.body;
-  if (!urls || typeof urls !== 'string' || !urls.trim()) {
-    return res.status(400).json({ error: '请输入代理地址' });
-  }
-  const list = loadProxies();
-  const lines = urls.split(/[\n]+/).map(s => s.trim()).filter(Boolean);
-  let added = 0;
-  for (const line of lines) {
-    // 跳过已有
-    if (list.some(p => p.url === line)) continue;
-    list.push({ id: randomUUID(), url: line, addedAt: new Date().toISOString() });
-    added++;
-  }
-  saveProxies(list);
-  res.json({ added, total: list.length });
-});
-
-app.delete('/api/proxies/:id', (req, res) => {
-  const list = loadProxies().filter(p => p.id !== req.params.id);
-  saveProxies(list);
-  res.json({ ok: true, total: list.length });
-});
-
-
-// 手动分配代理到指定账号
-app.post('/api/proxies/assign-one', (req, res) => {
-  const { index, proxy } = req.body || {};
-  if (index == null || !proxy) return res.status(400).json({ error: 'missing index or proxy' });
-  const acctPath = getAccountsPath();
-  let accounts = [];
-  try { accounts = JSON.parse(readFileSync(acctPath, 'utf8')).accounts || []; } catch (_) {}
-  if (index < 0 || index >= accounts.length) return res.status(400).json({ error: 'invalid index' });
-  accounts[index].proxy = proxy;
-  writeFileSync(acctPath, JSON.stringify({ accounts }, null, 2), 'utf8');
-  refreshAuthProvider();
-  res.json({ ok: true });
-});
-
-// 随机分配代理到所有账号
-app.post('/api/proxies/assign', (req, res) => {
-  const proxyList = loadProxies();
-  const acctPath = getAccountsPath();
-  let accounts = [];
-  try { accounts = JSON.parse(readFileSync(acctPath, 'utf8')).accounts || []; } catch (_) {}
-
-  if (proxyList.length === 0) return res.status(400).json({ error: '代理池为空' });
-
-  let pi = 0;
-  for (const acct of accounts) {
-    acct.proxy = proxyList[pi % proxyList.length].url;
-    pi++;
-  }
-  writeFileSync(acctPath, JSON.stringify({ accounts }, null, 2), 'utf8');
-  refreshAuthProvider();
-  res.json({ assigned: accounts.length, proxies: proxyList.length });
-});
-
-
 app.get('/api/logs', (req, res) => {
   res.json({ logs: requestLogs });
 });
@@ -388,17 +275,11 @@ app.get('/api/usage', async (req, res) => {
         result.push({ index: i, remaining_pct: 0, used_tokens: 0 });
         continue;
       }
-      const imgQ = getLocalImageQuota(auth.accountId) || getImageQuota(auth.accountId);
-      const imgExhausted = isImageQuotaExhausted(auth.accountId);
       result.push({
         index: i,
         remaining_pct: getRemainingPct(auth.accountId),
         used_tokens: getUsedTokens(auth.accountId),
         quota_tokens: QUOTA,
-        image_remaining: imgExhausted ? 0 : (imgQ ? imgQ.remaining : null),
-        image_limit: imgQ ? imgQ.limit : null,
-        image_exhausted: imgExhausted,
-        image_updated_at: imgQ ? imgQ.updatedAt : null,
       });
     }
     res.json({ accounts: result });
@@ -510,20 +391,24 @@ app.patch('/api/settings', (req, res) => {
 function startServer() {
   const n = refreshAuthProvider();
   if (n > 0) {
+    console.log('[OK] 已加载 ' + n + ' 个账号（轮询）');
   } else {
     try {
       loadAuth(AUTH_PATH);
+      console.log('[OK] 已加载 Codex 认证（单账号）');
     } catch (e) {
+      console.warn('[WARN] 未配置账号，请访问配置页添加或设置 CODEX_AUTH_PATH:', e.message);
     }
   }
   const server = app.listen(PORT, '0.0.0.0', () => {
     const mockReq = { get: (h) => (h === 'host' ? `localhost:${PORT}` : undefined), secure: false };
-    console.log('Codex Pro API 已启动 http://0.0.0.0:' + PORT);
-    console.log('   配置页: http://localhost:' + PORT + '/');
-    console.log('   对话接口: http://localhost:' + PORT + '/v1/chat/completions');
-    console.log('   生图接口: http://localhost:' + PORT + '/v1/images/generations');
-    console.log('   已加载 ' + n + ' 个账号');
     const oauthRedirect = getOAuthRedirectUri(mockReq);
+    console.log('\nCodex Pro API 已启动 http://0.0.0.0:' + PORT);
+    console.log('   配置页（添加账号）: http://localhost:' + PORT + '/');
+    console.log('   健康检查: http://localhost:' + PORT + '/health');
+    console.log('   OAuth 回调（绑定 API 用）: ' + oauthRedirect + (process.env.PUBLIC_URL || process.env.OAUTH_REDIRECT_URI ? ' (已用 PUBLIC_URL/OAUTH_REDIRECT_URI)' : ' (若绑定时 403 请设置 PUBLIC_URL)'));
+    console.log('   对话接口: http://localhost:' + PORT + '/v1/chat/completions');
+    console.log('   建议模型: gpt-5.3-codex\n');
   });
 
   setInterval(() => {

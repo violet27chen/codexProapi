@@ -12,10 +12,9 @@
 // 参考: gpt2api (internal/upstream/chatgpt/image.go, internal/image/runner.go)
 
 import { createHash, randomUUID } from 'crypto';
-import { ProxyAgent } from 'undici';
+
 import { updateImageQuota, recordImageUsage, getLocalImageQuota } from './usageTracker.js';
 import { markImageQuotaExhausted } from './accountStatus.js';
-
 // ── 常量 ────────────────────────────────────────────────────
 
 const BASE_URL = 'https://chatgpt.com';
@@ -28,7 +27,6 @@ const POW_PREFIX_PRF = 'gAAAAAB';
 const POW_DIFFICULTY = '0fffff';
 const MAX_REQUIREMENTS_ITER = 500000;
 const MAX_PROOF_ITER = 100000;
-
 // ── 请求头 ──────────────────────────────────────────────────
 
 function makeHeaders(authToken, accountId, deviceId, sessionId, targetPath) {
@@ -124,7 +122,7 @@ function solveProofToken(seed, difficulty) {
 
 // ── fetch 封装 ──────────────────────────────────────────────
 
-async function apiFetch(url, method, opts, proxyUrl) {
+async function apiFetch(url, method, opts) {
   const { authToken, accountId, deviceId, sessionId, body, extraHeaders,
     accept, targetPath, timeoutMs = 30000 } = opts;
   const controller = new AbortController();
@@ -134,10 +132,6 @@ async function apiFetch(url, method, opts, proxyUrl) {
     headers['Accept'] = accept || '*/*';
     if (extraHeaders) Object.assign(headers, extraHeaders);
     const init = { method, headers, signal: controller.signal };
-    if (proxyUrl) {
-      const d = getProxy(proxyUrl);
-      if (d) init.dispatcher = d;
-    }
     if (body) {
       init.body = typeof body === 'string' ? body : JSON.stringify(body);
       headers['Content-Type'] = 'application/json';
@@ -155,7 +149,7 @@ async function chatRequirements(authToken, accountId, deviceId, sessionId) {
   const res = await apiFetch(BASE_URL + path, 'POST', {
     authToken, accountId, deviceId, sessionId,
     body: { p: generateRequirementsToken() }, targetPath: path, timeoutMs: 20000,
-  }, proxyUrl);
+  });
   if (!res.ok) {
     const t = await res.text().catch(() => '');
     throw new Error(`chat-req ${res.status}: ${t.slice(0, 300)}`);
@@ -190,7 +184,7 @@ async function prepareFConversation(authToken, accountId, deviceId, sessionId,
   const res = await apiFetch(BASE_URL + path, 'POST', {
     authToken, accountId, deviceId, sessionId,
     body: payload, targetPath: path, extraHeaders: eh, timeoutMs: 25000,
-  }, proxyUrl);
+  });
   if (!res.ok) {
     const t = await res.text().catch(() => '');
     throw new Error(`prepare ${res.status}: ${t.slice(0, 300)}`);
@@ -246,7 +240,7 @@ async function streamFConversation(authToken, accountId, deviceId, sessionId,
     authToken, accountId, deviceId, sessionId,
     body: payload, targetPath: path,
     extraHeaders: eh, accept: 'text/event-stream', timeoutMs: 180000,
-  }, proxyUrl);
+  });
   if (!res.ok) {
     const t = await res.text().catch(() => '');
     throw new Error(`f/conv ${res.status}: ${t.slice(0, 300)}`);
@@ -325,14 +319,12 @@ async function pollConversationForImages(authToken, accountId, deviceId, session
     const res = await apiFetch(BASE_URL + path, 'GET', {
       authToken, accountId, deviceId, sessionId,
       targetPath: path, timeoutMs: 15000, accept: 'application/json',
-    }, proxyUrl);
+    });
     if (!res.ok) {
       const t = await res.text().catch(() => '');
       throw new Error(`poll ${res.status}: ${t.slice(0, 200)}`);
     }
     const data = await res.json();
-
-
 
     // 遍历 messages 找 file-service:// 引用
     const msgs = data.mapping ? Object.values(data.mapping) : (data.messages || []);
@@ -404,7 +396,7 @@ async function getImageDownloadURL(authToken, accountId, deviceId, sessionId, co
   const path = new URL(url).pathname;
   const res = await apiFetch(url, 'GET', {
     authToken, accountId, deviceId, sessionId, targetPath: path, timeoutMs: 20000,
-  }, proxyUrl);
+  });
   if (!res.ok) {
     const t = await res.text().catch(() => '');
     throw new Error(`dl-url ${res.status}: ${t.slice(0, 200)}`);
@@ -413,14 +405,8 @@ async function getImageDownloadURL(authToken, accountId, deviceId, sessionId, co
   return d.download_url || d.url || '';
 }
 
-export async function fetchImageBytes(url, authToken, accountId, deviceId, sessionId, proxyUrl) {
+export async function fetchImageBytes(url, authToken, accountId, deviceId, sessionId) {
   // 代理分发器缓存
-const _proxyCache = new Map();
-function getProxy(url) {
-  if (!url) return undefined;
-  if (_proxyCache.has(url)) return _proxyCache.get(url);
-  try { const a = new ProxyAgent({ uri: url, requestTls: { rejectUnauthorized: false } }); _proxyCache.set(url, a); return a; } catch (_) { return undefined; }
-}
 
 // chatgpt.com 开头的 estuary/attachment 回源 URL 必须带认证头，否则 403
   const needAuth = url.startsWith(BASE_URL + '/');
@@ -433,13 +419,11 @@ function getProxy(url) {
     headers['Origin'] = 'https://chatgpt.com';
   }
   const init = { headers };
-  if (proxyUrl) { const d = getProxy(proxyUrl); if (d) init.dispatcher = d; }
-  const res = await fetch(url, init);
+const res = await fetch(url, init);
   if (!res.ok) throw new Error(`fetch image ${res.status}`);
   const buf = await res.arrayBuffer();
   return Buffer.from(buf).toString('base64');
 }
-
 
 // ── 内存缓存 ────────────────────────────────────────────────
 // Map<token, { signedURL, authToken, accountId, deviceId, sessionId, expires }>
@@ -475,7 +459,6 @@ export async function generateImage(openaiReq, auth) {
   const n = Math.min(Math.max(Number(openaiReq.n) || 1, 1), 10);
   const authToken = auth.accessToken;
   const accountId = auth.accountId;
-  const proxyUrl = auth.proxy || null;
   // 从 JWT 中解析 session_id（jwt.io 格式：header.payload.signature）
   let sessionId = auth.sessionId || '';
   if (!sessionId && authToken) {

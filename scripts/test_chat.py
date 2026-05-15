@@ -17,7 +17,7 @@ except ImportError:
     HAS_OPENAI = False
 
 BASE_URL = os.environ.get("CODEX_PROAPI_URL", "http://localhost:1455")
-MODEL = "gpt-5.3-codex"
+MODEL = "gpt-5.5"
 
 # 客户端工具执行器（OpenAI 标准：客户端收到 tool_calls 后自行执行）
 def execute_tool(name, arguments):
