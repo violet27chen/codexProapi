@@ -1600,6 +1600,7 @@
     </nav>
     <div class="sidebar-footer">
       <a href="https://free.violetteam.cloud/" target="_blank" rel="noopener" class="footer-recommend" data-i18n-html="footer.violetteam">推荐使用 free.violetteam.cloud<br>注册 ChatGPT 小号并添加</a>
+      <a href="https://hero-sms.com/?ref=1078800" target="_blank" rel="noopener" class="footer-recommend" style="margin-top:4px;">📱 herosms 平台<br><span style="font-size:10px;color:var(--text-muted);">接码注册 Codex（推荐泰国）</span></a>
       <a href="https://github.com/violettoolssite/codexProapi" target="_blank" rel="noopener" class="footer-github" aria-label="GitHub" title="GitHub"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg></a>
     </div>
   </aside>
@@ -1833,6 +1834,19 @@
       </div>
       <div id="settings-server" class="settings-panel">
         <div class="settings-grid">
+           <div class="card" style="max-width: 100%;">
+            <h3 class="settings-section-title">代理池 (Proxy Pool)</h3>
+            <div class="form-group">
+              <textarea id="proxyPoolInput" class="search-input" style="width:100%;min-height:80px;resize:vertical;" placeholder="一行一个&#10;http://user:pass@host:port&#10;socks5://host:port"></textarea>
+            </div>
+            <div style="display:flex;gap:8px;margin-bottom:12px;">
+              <button type="button" class="btn-copy" onclick="addProxies()">添加</button>
+              <button type="button" class="btn-copy" onclick="autoAssignProxies()">自动分配</button>
+              <button type="button" class="btn-copy" onclick="manualAssignProxy()">手动分配</button>
+              <button type="button" class="btn-copy" onclick="refreshProxyList()">刷新</button>
+            </div>
+            <div id="proxyListContainer" style="font-size:12px;max-height:200px;overflow-y:auto;"></div>
+          </div>
           <div class="card" style="max-width: 100%;">
             <h3 class="settings-section-title" data-i18n="settings.section_apikey">API Key</h3>
             <div class="label" data-i18n="settings.apikey_label">密钥（可选，仅一个）</div>
@@ -2507,7 +2521,8 @@
         tr.dataset.id = (acc.accountIdMask || '').toLowerCase();
         const sourceKey = (acc.source === 'oauth') ? 'accounts.source_oauth' : 'accounts.source_manual';
         const sourceClass = (acc.source === 'oauth') ? 'badge-oauth' : 'badge-manual';
-        tr.innerHTML = '<td>' + (acc.name || t('accounts.account_n').replace('{n}', i + 1)) + '</td><td><span class="badge ' + sourceClass + '" data-i18n="' + sourceKey + '">' + t(sourceKey) + '</span></td><td style="color:var(--text-muted);font-size:13px">' + (acc.accountIdMask || '') + '</td><td><button type="button" class="btn-sm" data-index="' + i + '" data-i18n="accounts.delete">' + t('accounts.delete') + '</button></td>';
+        var proxyInfo = acc.proxy ? '<code style="font-size:11px;color:var(--accent);">' + escapeHtml(acc.proxy) + '</code>' : '<span style="color:var(--text-muted);font-size:11px;">—</span>';
+        tr.innerHTML = '<td>' + (acc.name || t('accounts.account_n').replace('{n}', i + 1)) + '</td><td><span class="badge ' + sourceClass + '" data-i18n="' + sourceKey + '">' + t(sourceKey) + '</span></td><td style="color:var(--text-muted);font-size:13px">' + (acc.accountIdMask || '') + '</td><td>' + proxyInfo + '</td><td><button type="button" class="btn-sm" data-index="' + i + '" data-i18n="accounts.delete">' + t('accounts.delete') + '</button></td>';
         tbody.appendChild(tr);
       });
       document.getElementById('accountsCount').textContent = list.length;
@@ -2777,6 +2792,12 @@
         const u = usageList.find(function(a) { return a.index === i; });
         return (u && typeof u.image_remaining === 'number') ? u.image_remaining : null;
       };
+      const getImgPct = (i) => {
+        const u = usageList.find(function(a) { return a.index === i; });
+        if (!u || u.image_remaining == null || u.image_limit == null || u.image_limit === 0) return null;
+        if (u.image_exhausted) return 0;
+        return Math.round((u.image_remaining / u.image_limit) * 100);
+      };
       const isImgExhausted = (i) => {
         const u = usageList.find(function(a) { return a.index === i; });
         return !!(u && u.image_exhausted);
@@ -2786,19 +2807,12 @@
         return (u && typeof u.quota_tokens === 'number') ? u.quota_tokens : null;
       };
       // 图片模型的生图进度百分比
-      const getImgPct = (i) => {
-        const u = usageList.find(function(a) { return a.index === i; });
-        if (!u || u.image_remaining == null || u.image_limit == null) return null;
-        if (u.image_exhausted) return 0;
-        return Math.round((u.image_remaining / u.image_limit) * 100);
-      };
       const fmtTokens = (n) => n == null ? '' : (n >= 1000000 ? (n / 1000000).toFixed(1) + 'M' : n.toLocaleString());
       tbody.innerHTML = MODEL_IDS.map(modelId => {
         const accountList = list.length ? list.map((acc, i) => {
-          const pct = getPct(i);
+          let pct = getPct(i);
           const used = getUsed(i);
           const name = acc.name || t('accounts.account_n').replace('{n}', i + 1);
-          const fillClass = pct <= 0 ? 'empty' : (pct <= 25 ? 'low' : '');
           // 对话额度
           const quotaTk = getQuotaTokens(i);
           const usedStr = used != null ? (locale === 'zh'
@@ -2808,6 +2822,12 @@
           // 生图剩余次数
           // 生图额度只在图片模型行显示
           const isImageModel = modelId.startsWith('gpt-image');
+          if (isImageModel) {
+            const ip = getImgPct(i);
+            if (ip != null) pct = ip;
+            if (isImgExhausted(i)) pct = 0;
+          }
+          const fillClass = pct <= 0 ? 'empty' : (pct <= 25 ? 'low' : '');
           let imgHtml = '';
           if (isImageModel) {
             const imgExhausted = isImgExhausted(i);
