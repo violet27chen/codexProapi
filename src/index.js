@@ -279,8 +279,8 @@ app.get('/api/proxies', (req, res) => {
 });
 
 app.post('/api/proxies/reassign', (req, res) => {
-  const { accounts } = listAccountsForApi();
-  const accountIds = accounts.map(a => a.accountId);
+  const auths = loadAccountsForProxy();
+  const accountIds = auths.map(a => a.accountId);
   reassignAllAccounts(accountIds);
   res.json({ ok: true, assigned: accountIds.length, proxies: getProxyCount() });
 });
@@ -529,10 +529,10 @@ function startServer() {
     console.log('   建议模型: gpt-5.3-codex\n');
 
     // 启动时自动分配账号到代理（每个代理 3 个账号）
-    const { accounts } = listAccountsForApi();
-    if (accounts.length && getProxyCount()) {
-      reassignAllAccounts(accounts.map(a => a.accountId));
-      console.log(`[ProxyPool] Auto-assigned ${accounts.length} accounts across ${getProxyCount()} proxies`);
+    const auths = loadAccountsForProxy();
+    if (auths.length && getProxyCount()) {
+      reassignAllAccounts(auths.map(a => a.accountId));
+      console.log(`[ProxyPool] Auto-assigned ${auths.length} accounts across ${getProxyCount()} proxies`);
     }
   });
 
