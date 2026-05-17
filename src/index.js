@@ -209,17 +209,32 @@ app.get('/health', (req, res) => {
 
 app.get('/favicon.ico', (req, res) => res.status(204).end());
 
+// 动态模型列表 - 从配置文件读取，支持热更新
+const MODELS_PATH = join(dirname(getAccountsPath()), 'models.json');
+function loadModels() {
+  try {
+    const raw = readFileSync(MODELS_PATH, 'utf8');
+    return JSON.parse(raw);
+  } catch {
+    return ['gpt-5.5', 'gpt-5.4', 'gpt-5.3-codex', 'gpt-5.2', 'gpt-image-2'];
+  }
+}
+
 app.get('/v1/models', (req, res) => {
+  const models = loadModels();
   res.json({
     object: 'list',
-    data: [
-      { id: 'gpt-5.5', object: 'model', created: 1687882411, owned_by: 'openai' },
-      { id: 'gpt-5.4', object: 'model', created: 1687882411, owned_by: 'openai' },
-      { id: 'gpt-5.3-codex', object: 'model', created: 1687882411, owned_by: 'openai' },
-      { id: 'gpt-5.2', object: 'model', created: 1687882411, owned_by: 'openai' },
-      { id: 'gpt-image-2', object: 'model', created: 1687882411, owned_by: 'openai' },
-    ],
+    data: models.map(id => ({
+      id, object: 'model', created: 1687882411, owned_by: 'openai',
+    })),
   });
+});
+
+// 账号统计接口 - 前端动态获取
+app.get('/api/stats', (req, res) => {
+  const { accounts } = listAccountsForApi();
+  const models = loadModels();
+  res.json({ accounts: accounts.length, models });
 });
 
 app.post('/v1/chat/completions', async (req, res) => {
