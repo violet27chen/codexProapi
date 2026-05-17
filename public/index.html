@@ -277,7 +277,7 @@
             <a href="#docs" class="btn-ghost">View docs</a>
             <a href="/auth/login" class="btn-accent">Add your account</a>
         </div>
-        <div class="models-bar" id="models-bar"></div>
+        <div class="models-bar"><span class="model-pill">gpt-5.5</span><span class="model-pill">gpt-5.4</span><span class="model-pill">gpt-5.3-codex</span><span class="model-pill">gpt-5.2</span><span class="model-pill">gpt-image-2</span></div>
    </section>
 
    <section class="features" id="features">
@@ -530,30 +530,21 @@ console.<span class="fn">log</span>(res.choices[<span class="num">0</span>].mess
             if (el) el.classList.remove('hidden');
         }
         // 动态获取模型和账号统计
+
+        // 动态获取账号统计
         async function loadStats() {
             try {
                 const res = await fetch("/api/stats");
                 const data = await res.json();
-                // 更新模型 pills
-                const bar = document.getElementById("models-bar");
-                if (bar) bar.innerHTML = data.models.map(m => 
-                    `<span class="model-pill">${m}</span>`).join("");
-                // 更新模型下拉框
-                const sel = document.getElementById("model-select");
-                if (sel) sel.innerHTML = data.models.map(m => 
-                    `<option value="${m}">${m}</option>`).join("");
-                // 更新统计数字
                 const acc = document.getElementById("stat-accounts");
                 if (acc) acc.textContent = data.accounts;
-                const mdl = document.getElementById("stat-models");
-                if (mdl) mdl.textContent = data.models.length;
             } catch(e) { console.warn("loadStats failed:", e); }
         }
         // OAuth 回调处理
         function handleOAuthCallback() {
             const params = new URLSearchParams(window.location.search);
             if (params.get("oauth") === "success") {
-                const bar = document.getElementById("models-bar");
+                const bar = document.querySelector(".models-bar");
                 if (bar) bar.insertAdjacentHTML("beforebegin",
                     `<div style="background:rgba(16,185,129,0.12);color:#047857;padding:8px 16px;border-radius:6px;margin-bottom:16px;font-size:14px">
                     Account added successfully! Welcome aboard.
