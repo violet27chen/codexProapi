@@ -3,7 +3,8 @@
 <head>
    <meta charset="UTF-8">
    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-   <title>CodexPro API - 免费AI接口服务</title>
+   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23533afd'/><text x='50' y='68' font-family='Arial' font-size='60' font-weight='bold' fill='white' text-anchor='middle'>C</text></svg>">
+   <title>CodexPro API - Free AI API Platform</title>
    <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@300;400;500;600&family=Source+Code+Pro:wght@400;500;700&display=swap" rel="stylesheet">
    <style>
        :root {
@@ -261,23 +262,36 @@
            <div class="nav-links">
                <a href="#features">Features</a>
                <a href="#docs">Docs</a>
-               <a href="https://27c.site/v1/models" class="btn-primary">Start now</a>
+               <span style="font-size:15px;font-weight:600;color:#533afd">Free Platform</span>
            </div>
        </div>
    </nav>
 
    <section class="hero">
+       <div style="background:linear-gradient(135deg,rgba(83,58,230,0.1),rgba(83,58,230,0.05));border:1px solid rgba(83,58,230,0.2);border-radius:12px;padding:20px 32px;margin-bottom:32px;max-width:680px;margin-left:auto;margin-right:auto">
+           <p style="font-size:18px;font-weight:600;color:#0a1628;margin-bottom:6px">Have an idle ChatGPT account?</p>
+           <p style="font-size:15px;color:#4a5568;line-height:1.5">Contribute it to keep this service free for everyone. We truly appreciate your support.</p>
+           <a href="#" onclick="event.preventDefault();document.getElementById('add-account-modal').style.display='flex'" style="display:inline-block;margin-top:12px;font-size:14px;font-weight:600;color:#533afd;text-decoration:none">Contribute now →</a>
+       </div>
+       <div style="background:linear-gradient(135deg,rgba(16,185,129,0.1),rgba(16,185,129,0.05));border:1px solid rgba(16,185,129,0.2);border-radius:12px;padding:20px 32px;margin-bottom:32px;max-width:680px;margin-left:auto;margin-right:auto">
+           <p style="font-size:18px;font-weight:600;color:#0a1628;margin-bottom:6px">Have spare proxy IPs?</p>
+           <p style="font-size:15px;color:#4a5568;line-height:1.5">Contribute proxy IPs to distribute traffic and keep accounts safe from bans.</p>
+           <a href="#" onclick="event.preventDefault();document.getElementById('add-proxy-modal').style.display='flex'" style="display:inline-block;margin-top:12px;font-size:14px;font-weight:600;color:#047857;text-decoration:none">Contribute proxy →</a>
+       </div>
        <div class="badge">Free and open to everyone</div>
        <h1>AI API, no strings attached</h1>
-       <p class="subtitle">
-           Free access to the latest AI models. OpenAI-compatible API format. No signup, no limits, no credit card.
-       </p>
+       <p style="font-size:14px;color:rgba(255,255,255,0.5);margin-bottom:24px">A GPT API powered by people who contribute for the love of it</p>
         <div class="cta-group">
-            <a href="https://27c.site/v1/chat/completions" class="btn-primary">Get API endpoint</a>
-            <a href="#docs" class="btn-ghost">View docs</a>
-            <a href="#" class="btn-accent" onclick="event.preventDefault();document.getElementById('add-account-modal').style.display='flex'">Add your account</a>
+            <a href="#docs" class="btn-primary">Get started</a>
         </div>
         <div class="models-bar"><span class="model-pill">gpt-5.5</span><span class="model-pill">gpt-5.4</span><span class="model-pill">gpt-5.3-codex</span><span class="model-pill">gpt-5.2</span><span class="model-pill">gpt-image-2</span></div>
+        <div style="display:flex;gap:24px;justify-content:center;margin-top:20px;flex-wrap:wrap">
+            <span style="font-size:13px;color:#4a5568">✓ Free access to latest AI models</span>
+            <span style="font-size:13px;color:#4a5568">✓ OpenAI-compatible API</span>
+            <span style="font-size:13px;color:#4a5568">✓ No signup required</span>
+            <span style="font-size:13px;color:#4a5568">✓ No limits</span>
+            <span style="font-size:13px;color:#4a5568">✓ No credit card</span>
+        </div>
    </section>
 
    <section class="features" id="features">
@@ -293,7 +307,14 @@
                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
            </div>
            <h3>Image generation</h3>
-           <p>Generate images with GPT-4o. Text-to-image via the standard images endpoint.</p>
+           <p>Generate images with gpt-image-2. Text-to-image via the standard images endpoint.</p>
+       </div>
+       <div class="feature-card">
+           <div class="feature-icon">
+               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+           </div>
+           <h3>Multi-account pool</h3>
+           <p>Multiple accounts for load balancing. Automatic failover when one account hits limits.</p>
        </div>
        <div class="feature-card">
            <div class="feature-icon">
@@ -301,6 +322,20 @@
            </div>
            <h3>Auto token refresh</h3>
            <p>Tokens refresh automatically. 24/7 uptime with zero maintenance required.</p>
+       </div>
+       <div class="feature-card">
+           <div class="feature-icon">
+               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+           </div>
+           <h3>Proxy rotation</h3>
+           <p>Built-in proxy pool support. Distribute requests across IPs to avoid rate limits.</p>
+       </div>
+       <div class="feature-card">
+           <div class="feature-icon">
+               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+           </div>
+           <h3>Community powered</h3>
+           <p>Built and maintained by contributors who believe in free AI access for everyone.</p>
        </div>
    </section>
 
@@ -485,6 +520,10 @@ console.<span class="fn">log</span>(res.choices[<span class="num">0</span>].mess
                    <div class="label">Active accounts</div>
                </div>
                <div class="stat-card">
+                   <div class="num" id="stat-proxies">2</div>
+                   <div class="label">Proxy IPs</div>
+               </div>
+               <div class="stat-card">
                    <div class="num" id="stat-models">5</div>
                    <div class="label">Models available</div>
                </div>
@@ -545,6 +584,18 @@ console.<span class="fn">log</span>(res.choices[<span class="num">0</span>].mess
             <p style="font-size:14px;color:#4a5568;line-height:1.6;margin-bottom:16px">Your token will be pushed to 27c.site automatically.</p>
         </div>
     </div>
+    <div id="add-proxy-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:999;align-items:center;justify-content:center" onclick="if(event.target===this)this.style.display='none'">
+        <div style="background:#fff;border-radius:12px;padding:40px;max-width:560px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3);position:relative">
+            <button onclick="document.getElementById('add-proxy-modal').style.display='none'" style="position:absolute;top:16px;right:16px;background:none;border:none;font-size:24px;cursor:pointer;color:#94a3b8">&times;</button>
+            <h3 style="font-size:24px;font-weight:600;color:#0a1628;margin-bottom:8px">Contribute Proxy IP</h3>
+            <p style="font-size:14px;color:#4a5568;line-height:1.6;margin-bottom:16px">Enter static proxies, one per line. Supported: <code style="background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:13px">http://</code> <code style="background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:13px">socks5://</code></p>
+
+            <textarea id="proxy-input" placeholder="socks5://user:pass@host:port&#10;http://user:pass@host:port" style="width:100%;height:120px;background:#0f172a;color:#e2e8f0;border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:14px 16px;font-family:monospace;font-size:13px;resize:vertical;outline:none;margin-bottom:16px"></textarea>
+
+            <button onclick="submitProxies()" style="width:100%;background:#533afd;color:#fff;border:none;border-radius:8px;padding:12px;font-size:15px;font-weight:600;cursor:pointer;transition:background 0.2s" onmouseover="this.style.background='#4434d4'" onmouseout="this.style.background='#533afd'">Submit</button>
+            <p id="proxy-status" style="font-size:13px;color:#94a3b8;margin-top:12px;text-align:center"></p>
+        </div>
+    </div>
     <script>
         let currentLang = 'python';
         let currentMode = 'sync';
@@ -575,12 +626,30 @@ console.<span class="fn">log</span>(res.choices[<span class="num">0</span>].mess
         // 动态获取账号统计
         async function loadStats() {
             try {
-                const res = await fetch("/api/stats");
-                const data = await res.json();
+                const [statsRes, proxyRes] = await Promise.all([
+                    fetch("/api/stats"),
+                    fetch("/api/proxies")
+                ]);
+                const data = await statsRes.json();
+                const proxyData = await proxyRes.json();
                 const acc = document.getElementById("stat-accounts");
-                if (acc) acc.textContent = data.accounts;
+                const pro = document.getElementById("stat-proxies");
+                if (acc && acc.textContent != data.accounts) {
+                    acc.textContent = data.accounts;
+                    acc.style.transition = "transform 0.3s";
+                    acc.style.transform = "scale(1.2)";
+                    setTimeout(() => acc.style.transform = "scale(1)", 300);
+                }
+                if (pro && pro.textContent != proxyData.total) {
+                    pro.textContent = proxyData.total;
+                    pro.style.transition = "transform 0.3s";
+                    pro.style.transform = "scale(1.2)";
+                    setTimeout(() => pro.style.transform = "scale(1)", 300);
+                }
             } catch(e) { console.warn("loadStats failed:", e); }
         }
+        // 每 5 秒自动刷新统计
+        setInterval(loadStats, 5000);
         // OAuth 回调处理
         function handleOAuthCallback() {
             const params = new URLSearchParams(window.location.search);
@@ -596,6 +665,19 @@ console.<span class="fn">log</span>(res.choices[<span class="num">0</span>].mess
         }
         document.addEventListener("DOMContentLoaded", () => { loadStats(); handleOAuthCallback(); });
 
+        async function submitProxies() {
+            const input = document.getElementById('proxy-input');
+            const status = document.getElementById('proxy-status');
+            const lines = input.value.split('\n').map(l => l.trim()).filter(l => l && (l.startsWith('http://') || l.startsWith('https://') || l.startsWith('socks5://') || l.startsWith('socks4://')));
+            if (!lines.length) { status.textContent = 'Please enter valid proxy URLs'; status.style.color = '#ef4444'; return; }
+            status.textContent = 'Submitting...'; status.style.color = '#94a3b8';
+            try {
+                const res = await fetch('/api/proxies/add', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ proxies: lines }) });
+                const data = await res.json();
+                if (res.ok) { status.textContent = '🎉 Thank you! ' + lines.length + ' proxy(es) added.'; status.style.color = '#10b981'; input.value = ''; }
+                else { status.textContent = 'Error: ' + (data.error || 'Unknown'); status.style.color = '#ef4444'; }
+            } catch(e) { status.textContent = 'Connection failed'; status.style.color = '#ef4444'; }
+        }
         function copyCode(btn) {
             const code = btn.parentElement.querySelector('code');
             const text = code.textContent;

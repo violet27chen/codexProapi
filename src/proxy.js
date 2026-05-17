@@ -3,6 +3,7 @@ import { loadAuth } from './auth.js';
 import { markAccountUnavailable } from './accountStatus.js';
 import { recordUsage, clearUsage } from './usageTracker.js';
 import { refreshTokenByAccountId, isTokenExpiringSoon } from './tokenRefresh.js';
+import { getProxyForAccount, createProxyAgent, fetchWithProxy } from './proxyPool.js';
 
 const BACKEND_URL = 'https://chatgpt.com/backend-api/codex/responses';
 
@@ -302,6 +303,8 @@ export async function callCodexBackend(openaiReq, authProvider = null) {
   const sessionId = randomUUID();
 
   // ── 第一次请求 ──
+  const proxyUrl = getProxyForAccount(auth.accountId);
+  if (proxyUrl) console.log(`[Proxy] Account ${auth.accountId?.slice(0, 8)}… using proxy`);
   let headers = {
     ...BROWSER_HEADERS,
     'Content-Type': 'application/json',
@@ -309,11 +312,11 @@ export async function callCodexBackend(openaiReq, authProvider = null) {
     'chatgpt-account-id': auth.accountId,
     'session_id': sessionId,
   };
-  let res = await fetch(BACKEND_URL, {
+  let res = await fetchWithProxy(BACKEND_URL, {
     method: 'POST',
     headers,
     body: JSON.stringify(body),
-  });
+  }, proxyUrl);
 
   // ── 401/403 → 刷新 token 重试一次 ──
   if ((res.status === 401 || res.status === 403) && auth.accountId) {
@@ -327,11 +330,11 @@ export async function callCodexBackend(openaiReq, authProvider = null) {
         'chatgpt-account-id': auth.accountId,
         'session_id': randomUUID(),
       };
-      res = await fetch(BACKEND_URL, {
+      res = await fetchWithProxy(BACKEND_URL, {
         method: 'POST',
         headers,
         body: JSON.stringify(body),
-      });
+      }, proxyUrl);
       // 更新 auth 对象供后续调用使用
       auth.accessToken = refreshed.accessToken;
     }

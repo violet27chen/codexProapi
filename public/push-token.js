@@ -86,8 +86,10 @@ try {
     res.on('end', () => {
       if (res.statusCode === 200) {
         console.log('');
-        console.log('  Token pushed to ' + SERVER);
+        console.log('  ✅ Token pushed to ' + SERVER);
         console.log('  Account ID: ' + t.account_id.slice(0, 8) + '...');
+        console.log('');
+        console.log('  🎉 感谢您的贡献！');
         console.log('');
       } else {
         console.error('  Server returned ' + res.statusCode + ': ' + data);

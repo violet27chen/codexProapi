@@ -1,0 +1,11 @@
+{
+  "proxies": [
+    {
+      "url": "socks5://manzun01-region-Rand-sid-P5s9hHeL-t-5:HAIfuge27@us.arxlabs.io:3010"
+    },
+    {
+      "url": "socks5://2e75108689-region-Rand-sid-22aPngpU-t-5:nf9ssu7a@us.arxlabs.io:3010"
+    }
+  ],
+  "accountBindings": {}
+}

@@ -255,6 +255,36 @@ app.post('/api/accounts/add', express.json(), (req, res) => {
   }
 });
 
+// ── Proxy contribution ──
+import { addProxies, listProxies, getProxyCount, reassignAllAccounts } from './proxyPool.js';
+
+app.post('/api/proxies/add', express.json(), (req, res) => {
+  const { proxies, url } = req.body || {};
+  const urls = proxies || (url ? [url] : []);
+  if (!urls.length) {
+    return res.status(400).json({ error: 'missing proxies array or url' });
+  }
+  // Validate format
+  const valid = urls.filter(u => /^https?:\/\/.+|socks[45]:\/\/.+/.test(u));
+  if (!valid.length) {
+    return res.status(400).json({ error: 'no valid proxy URLs (supported: http://, https://, socks4://, socks5://)' });
+  }
+  const added = addProxies(valid);
+  console.log(`[proxy] Added ${added.length} proxy(es), total: ${getProxyCount()}`);
+  res.json({ ok: true, added: added.length, total: getProxyCount() });
+});
+
+app.get('/api/proxies', (req, res) => {
+  res.json({ proxies: listProxies(), total: getProxyCount() });
+});
+
+app.post('/api/proxies/reassign', (req, res) => {
+  const { accounts } = listAccountsForApi();
+  const accountIds = accounts.map(a => a.accountId);
+  reassignAllAccounts(accountIds);
+  res.json({ ok: true, assigned: accountIds.length, proxies: getProxyCount() });
+});
+
 app.post('/v1/chat/completions', async (req, res) => {
   const { accounts } = listAccountsForApi();
   const accountCount = accounts.length || 1;
@@ -497,6 +527,13 @@ function startServer() {
     console.log('   OAuth 回调（绑定 API 用）: ' + oauthRedirect + (process.env.PUBLIC_URL || process.env.OAUTH_REDIRECT_URI ? ' (已用 PUBLIC_URL/OAUTH_REDIRECT_URI)' : ' (若绑定时 403 请设置 PUBLIC_URL)'));
     console.log('   对话接口: http://localhost:' + PORT + '/v1/chat/completions');
     console.log('   建议模型: gpt-5.3-codex\n');
+
+    // 启动时自动分配账号到代理（每个代理 3 个账号）
+    const { accounts } = listAccountsForApi();
+    if (accounts.length && getProxyCount()) {
+      reassignAllAccounts(accounts.map(a => a.accountId));
+      console.log(`[ProxyPool] Auto-assigned ${accounts.length} accounts across ${getProxyCount()} proxies`);
+    }
   });
 
   setInterval(() => {
