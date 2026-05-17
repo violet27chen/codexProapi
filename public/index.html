@@ -144,6 +144,33 @@
         .code-block .kw { color: #a78bfa; }
         .code-block .str { color: #86efac; }
         .code-block .punc { color: rgba(255,255,255,0.5); }
+        .code-block .cmt { color: #64748b; }
+        .code-block .fn { color: #67e8f9; }
+        .code-block .num { color: #f9a8d4; }
+        .code-block .hidden { display: none; }
+        .code-tabs {
+            display: flex; gap: 4px; margin-bottom: 12px;
+            border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0;
+        }
+        .code-tab {
+            background: transparent; border: none; color: rgba(255,255,255,0.5);
+            padding: 10px 20px; font-size: 14px; font-weight: 500; cursor: pointer;
+            border-bottom: 2px solid transparent; transition: all 0.2s;
+            font-family: 'Source Sans 3', system-ui, sans-serif;
+        }
+        .code-tab:hover { color: rgba(255,255,255,0.8); }
+        .code-tab.active { color: #a78bfa; border-bottom-color: #a78bfa; }
+        .code-mode-toggle {
+            display: flex; gap: 4px; margin-bottom: 16px;
+        }
+        .mode-btn {
+            background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+            color: rgba(255,255,255,0.5); padding: 6px 16px; border-radius: 6px;
+            font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s;
+            font-family: 'Source Sans 3', system-ui, sans-serif;
+        }
+        .mode-btn:hover { color: rgba(255,255,255,0.8); border-color: rgba(255,255,255,0.2); }
+        .mode-btn.active { background: rgba(167,139,250,0.15); border-color: rgba(167,139,250,0.4); color: #a78bfa; }
         .dark-section {
             background: var(--dark-section);
             padding: 80px 24px;
@@ -188,6 +215,8 @@
             .dark-inner { grid-template-columns: 1fr; }
             .nav-links { display: none; }
             .code-card { padding: 32px 24px; }
+            .code-tabs { overflow-x: auto; flex-wrap: nowrap; }
+            .code-tab { padding: 8px 14px; font-size: 13px; white-space: nowrap; }
         }
     </style>
 </head>
@@ -250,13 +279,153 @@
         <div class="code-card">
             <h2>Quick start</h2>
             <p class="sub">Works with any OpenAI-compatible client. Just point your base URL here.</p>
-            <div class="code-block">
-                <code>
-<span class="kw">curl</span> https://27c.site/v1/chat/completions <span class="punc">\</span><br>
-&nbsp; -H <span class="str">"Content-Type: application/json"</span> <span class="punc">\</span><br>
-&nbsp; -d <span class="str">'{"model":"gpt-5.5","messages":[{"role":"user","content":"Hello"}]}'</span>
-                </code>
+            <!-- Language tabs -->
+            <div class="code-tabs">
+                <button class="code-tab active" onclick="showCode('python')">Python</button>
+                <button class="code-tab" onclick="showCode('js')">JavaScript</button>
+                <button class="code-tab" onclick="showCode('go')">Go</button>
+                <button class="code-tab" onclick="showCode('curl')">cURL</button>
             </div>
+            <!-- Mode toggle -->
+            <div class="code-mode-toggle">
+                <button class="mode-btn active" onclick="setMode('sync')">Non-streaming</button>
+                <button class="mode-btn" onclick="setMode('stream')">Streaming</button>
+            </div>
+
+            <!-- Python -->
+            <div class="code-block" id="code-python-sync">
+                <code><span class="cmt">from openai import OpenAI</span>
+
+<span class="kw">client</span> = <span class="fn">OpenAI</span>(base_url=<span class="str">"https://27c.site/v1"</span>, api_key=<span class="str">"any"</span>)
+
+<span class="kw">response</span> = client.chat.completions.<span class="fn">create</span>(
+    model=<span class="str">"gpt-5.5"</span>,
+    messages=[{<span class="str">"role"</span>: <span class="str">"user"</span>, <span class="str">"content"</span>: <span class="str">"Hello!"</span>}]
+)
+
+<span class="fn">print</span>(response.choices[<span class="num">0</span>].message.content)</code></div>
+            <div class="code-block hidden" id="code-python-stream">
+                <code><span class="cmt">from openai import OpenAI</span>
+
+<span class="kw">client</span> = <span class="fn">OpenAI</span>(base_url=<span class="str">"https://27c.site/v1"</span>, api_key=<span class="str">"any"</span>)
+
+<span class="kw">stream</span> = client.chat.completions.<span class="fn">create</span>(
+    model=<span class="str">"gpt-5.5"</span>,
+    messages=[{<span class="str">"role"</span>: <span class="str">"user"</span>, <span class="str">"content"</span>: <span class="str">"Hello!"</span>}],
+    stream=<span class="num">True</span>
+)
+
+<span class="kw">for</span> chunk <span class="kw">in</span> stream:
+    <span class="kw">if</span> chunk.choices[<span class="num">0</span>].delta.content:
+        <span class="fn">print</span>(chunk.choices[<span class="num">0</span>].delta.content, end=<span class="str">""</span>)</code></div>
+
+            <!-- JavaScript -->
+            <div class="code-block hidden" id="code-js-sync">
+                <code><span class="kw">import</span> OpenAI <span class="kw">from</span> <span class="str">"openai"</span>;
+
+<span class="kw">const</span> client = <span class="kw">new</span> <span class="fn">OpenAI</span>({
+  baseURL: <span class="str">"https://27c.site/v1"</span>,
+  apiKey: <span class="str">"any"</span>,
+});
+
+<span class="kw">const</span> res = <span class="kw">await</span> client.chat.completions.<span class="fn">create</span>({
+  model: <span class="str">"gpt-5.5"</span>,
+  messages: [{ role: <span class="str">"user"</span>, content: <span class="str">"Hello!"</span> }],
+});
+
+console.<span class="fn">log</span>(res.choices[<span class="num">0</span>].message.content);</code></div>
+            <div class="code-block hidden" id="code-js-stream">
+                <code><span class="kw">import</span> OpenAI <span class="kw">from</span> <span class="str">"openai"</span>;
+
+<span class="kw">const</span> client = <span class="kw">new</span> <span class="fn">OpenAI</span>({
+  baseURL: <span class="str">"https://27c.site/v1"</span>,
+  apiKey: <span class="str">"any"</span>,
+});
+
+<span class="kw">const</span> stream = <span class="kw">await</span> client.chat.completions.<span class="fn">create</span>({
+  model: <span class="str">"gpt-5.5"</span>,
+  messages: [{ role: <span class="str">"user"</span>, content: <span class="str">"Hello!"</span> }],
+  stream: <span class="num">true</span>,
+});
+
+<span class="kw">for await</span> (<span class="kw">const</span> chunk <span class="kw">of</span> stream) {
+  <span class="kw">const</span> text = chunk.choices[<span class="num">0</span>]?.delta?.content;
+  <span class="kw">if</span> (text) process.stdout.<span class="fn">write</span>(text);
+}</code></div>
+
+            <!-- Go -->
+            <div class="code-block hidden" id="code-go-sync">
+                <code><span class="kw">package</span> main
+
+<span class="kw">import</span> (
+    <span class="str">"context"</span>
+    <span class="str">"fmt"</span>
+    openai <span class="str">"github.com/sashabaranov/go-openai"</span>
+)
+
+<span class="kw">func</span> <span class="fn">main</span>() {
+    client := openai.<span class="fn">NewClient</span>(<span class="str">"any"</span>, <span class="str">"https://27c.site/v1"</span>)
+
+    resp, err := client.Chat.Completions.<span class="fn">Create</span>(
+        context.<span class="fn">Background</span>(),
+        openai.ChatCompletionRequest{
+            Model: <span class="str">"gpt-5.5"</span>,
+            Messages: []openai.ChatCompletionMessage{
+                {Role: openai.ChatMessageRoleUser, Content: <span class="str">"Hello!"</span>},
+            },
+        },
+    )
+    <span class="kw">if</span> err != <span class="num">nil</span> { <span class="kw">panic</span>(err) }
+    fmt.<span class="fn">Println</span>(resp.Choices[<span class="num">0</span>].Message.Content)
+}</code></div>
+            <div class="code-block hidden" id="code-go-stream">
+                <code><span class="kw">package</span> main
+
+<span class="kw">import</span> (
+    <span class="str">"fmt"</span>
+    <span class="str">"os"</span>
+    openai <span class="str">"github.com/sashabaranov/go-openai"</span>
+)
+
+<span class="kw">func</span> <span class="fn">main</span>() {
+    client := openai.<span class="fn">NewClient</span>(<span class="str">"any"</span>, <span class="str">"https://27c.site/v1"</span>)
+
+    req := openai.ChatCompletionRequest{
+        Model: <span class="str">"gpt-5.5"</span>,
+        Messages: []openai.ChatCompletionMessage{
+            {Role: openai.ChatMessageRoleUser, Content: <span class="str">"Hello!"</span>},
+        },
+        Stream: <span class="num">true</span>,
+    }
+
+    stream, err := client.Chat.Completions.<span class="fn">Create</span>(ctx, req)
+    <span class="kw">if</span> err != <span class="num">nil</span> { <span class="kw">panic</span>(err) }
+    <span class="kw">defer</span> stream.<span class="fn">Close</span>()
+
+    <span class="kw">for</span> {
+        resp, err := stream.<span class="fn">Recv</span>()
+        <span class="kw">if</span> err != <span class="num">nil</span> { <span class="kw">break</span> }
+        fmt.<span class="fn">Print</span>(resp.Choices[<span class="num">0</span>].Delta.Content)
+    }
+}</code></div>
+
+            <!-- cURL -->
+            <div class="code-block hidden" id="code-curl-sync">
+                <code><span class="kw">curl</span> https://27c.site/v1/chat/completions <span class="punc">\</span>
+  -H <span class="str">"Content-Type: application/json"</span> <span class="punc">\</span>
+  -d <span class="str">'{
+    "model": "gpt-5.5",
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'</span></code></div>
+            <div class="code-block hidden" id="code-curl-stream">
+                <code><span class="kw">curl</span> https://27c.site/v1/chat/completions <span class="punc">\</span>
+  -H <span class="str">"Content-Type: application/json"</span> <span class="punc">\</span>
+  -d <span class="str">'{
+    "model": "gpt-5.5",
+    "messages": [{"role": "user", "content": "Hello!"}],
+    "stream": true
+  }'</span></code></div>
+
         </div>
     </section>
 
@@ -291,5 +460,26 @@
         <p>CodexPro API</p>
         <p><a href="https://27c.site">27c.site</a></p>
     </footer>
+    <script>
+        let currentLang = 'python';
+        let currentMode = 'sync';
+        function showCode(lang) {
+            currentLang = lang;
+            document.querySelectorAll('.code-tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            updateCode();
+        }
+        function setMode(mode) {
+            currentMode = mode;
+            document.querySelectorAll('.mode-btn').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            updateCode();
+        }
+        function updateCode() {
+            document.querySelectorAll('.code-block[id^="code-"]').forEach(b => b.classList.add('hidden'));
+            const el = document.getElementById('code-' + currentLang + '-' + currentMode);
+            if (el) el.classList.remove('hidden');
+        }
+    </script>
 </body>
 </html>
