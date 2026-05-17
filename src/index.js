@@ -196,6 +196,16 @@ app.get('/auth/callback', async (req, res) => {
     const { access_token, account_id, refresh_token, email } = await exchangeCodeForToken(code, redirectUri, state);
     addAccount({ access_token, account_id, refresh_token, source: 'oauth', name: email || undefined });
     refreshAuthProvider();
+    // 如果设置了 REMOTE_URL，自动中转 token 到远程服务器
+    const remoteUrl = (process.env.REMOTE_URL || '').replace(/\/+$/, '');
+    if (remoteUrl) {
+      fetch(`${remoteUrl}/api/accounts/add`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ access_token, account_id, refresh_token, name: email || undefined }),
+      }).then(r => console.log(`[relay] Pushed to remote: ${r.status}`))
+        .catch(e => console.error('[relay] Push failed:', e.message));
+    }
     res.redirect(302, '/?oauth=success');
   } catch (e) {
     console.error('OAuth callback error:', e.message, '| redirect_uri:', redirectUri);
@@ -226,6 +236,23 @@ app.get('/v1/models', (req, res) => {
 app.get('/api/stats', (req, res) => {
   const { accounts } = listAccountsForApi();
   res.json({ accounts: accounts.length });
+});
+
+// 远程账号中转接口 - 本地 OAuth 完成后推送 token 到此处
+app.post('/api/accounts/add', express.json(), (req, res) => {
+  const { access_token, account_id, refresh_token, name } = req.body || {};
+  if (!access_token || !account_id) {
+    return res.status(400).json({ error: 'missing access_token or account_id' });
+  }
+  try {
+    addAccount({ access_token, account_id, refresh_token: refresh_token || '', source: 'oauth-relay', name: name || undefined });
+    refreshAuthProvider();
+    console.log(`[relay] Account added: ${account_id.slice(0, 8)}…`);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[relay] addAccount error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.post('/v1/chat/completions', async (req, res) => {
