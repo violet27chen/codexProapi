@@ -1,18 +1,24 @@
 {
   "proxies": [
     {
-      "url": "socks5://manzun01-region-Rand-sid-P5s9hHeL-t-5:HAIfuge27@us.arxlabs.io:3010"
+      "url": "socks5://manzun01-region-Rand:HAIfuge27@us.arxlabs.io:3010"
     },
     {
-      "url": "socks5://2e75108689-region-Rand-sid-22aPngpU-t-5:nf9ssu7a@us.arxlabs.io:3010"
+      "url": "socks5://2e75108689-region-Rand:nf9ssu7a@us.arxlabs.io:3010"
+    },
+    {
+      "url": "socks5://rKtndKsSJHyG:sxNUV5pvUw@50.3.64.229:443"
     }
   ],
   "accountBindings": {
     "google-oauth2|110130825415214272453": 0,
     "google-oauth2|111917277842446945959": 1,
-    "google-oauth2|108977182983528191821": 0,
-    "google-oauth2|109433115611248621925": 1,
-    "auth0|AQfxC3TI5yLOa14VXWTkLzC2": 0,
-    "auth0|zRPGR2wzZX93M8Ci2tISbSj8": 1
+    "google-oauth2|108977182983528191821": 2,
+    "google-oauth2|109433115611248621925": 0,
+    "auth0|AQfxC3TI5yLOa14VXWTkLzC2": 1,
+    "auth0|zRPGR2wzZX93M8Ci2tISbSj8": 2,
+    "apple|001089.3991cb7d2754456fa1e168294f304091.0524": 0,
+    "test-123": 1,
+    "81191eb4-6429-4c8b-8d1d-ec8260aed66b": 2
   }
 }
