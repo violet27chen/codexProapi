@@ -271,6 +271,14 @@ app.post('/api/proxies/add', express.json(), (req, res) => {
   }
   const added = addProxies(valid);
   console.log(`[proxy] Added ${added.length} proxy(es), total: ${getProxyCount()}`);
+
+  // 新代理添加后，自动为直连账号分配代理
+  if (added.length) {
+    const auths = loadAccountsForProxy();
+    const accountIds = auths.map(a => a.accountId);
+    reassignAllAccounts(accountIds);
+  }
+
   res.json({ ok: true, added: added.length, total: getProxyCount() });
 });
 

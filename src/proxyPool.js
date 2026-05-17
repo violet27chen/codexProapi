@@ -84,15 +84,10 @@ export function getProxyForAccount(accountId) {
     }
   }
 
-  // 如果最佳代理已满（>=3），尝试其他代理
+  // 如果最佳代理已满（>=3），不绑定，走直连
   if (minCount >= 3) {
-    for (let i = 0; i < proxyPool.proxies.length; i++) {
-      if (counts[i] < 3) {
-        bestIdx = i;
-        minCount = counts[i];
-        break;
-      }
-    }
+    console.log(`[ProxyPool] All proxies full, account ${accountId.slice(0, 8)}… will use direct connection`);
+    return null;
   }
 
   // 绑定账号到代理
@@ -197,20 +192,29 @@ export function getProxyCount() {
   return proxyPool.proxies.length;
 }
 
-/** 重新分配所有账号到代理（均衡分配） */
+/** 重新分配账号到代理（严格每个代理 3 个账号） */
 export function reassignAllAccounts(accountIds) {
   proxyPool.accountBindings = {};
   const proxyCount = proxyPool.proxies.length;
+  const MAX_PER_PROXY = 3;
   if (proxyCount === 0 || !accountIds.length) {
     saveProxyPool();
     return;
   }
+  let assigned = 0;
   for (let i = 0; i < accountIds.length; i++) {
     const proxyIdx = i % proxyCount;
+    // 检查该代理是否已满
+    let count = 0;
+    for (const [, pidx] of Object.entries(proxyPool.accountBindings)) {
+      if (pidx === proxyIdx) count++;
+    }
+    if (count >= MAX_PER_PROXY) continue; // 跳过已满的代理
     proxyPool.accountBindings[accountIds[i]] = proxyIdx;
+    assigned++;
   }
   saveProxyPool();
-  console.log(`[ProxyPool] Reassigned ${accountIds.length} accounts across ${proxyCount} proxies`);
+  console.log(`[ProxyPool] Assigned ${assigned}/${accountIds.length} accounts across ${proxyCount} proxies (${MAX_PER_PROXY} each)`);
 }
 
 loadProxyPool();
