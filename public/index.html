@@ -149,7 +149,18 @@
        .code-block .cmt { color: #64748b; }
        .code-block .fn { color: #67e8f9; }
        .code-block .num { color: #f9a8d4; }
-       .code-block.hidden { display: none; }
+        .code-block.hidden { display: none; }
+        .code-block { position: relative; }
+        .copy-btn {
+            position: absolute; top: 12px; right: 12px;
+            background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
+            color: #fff; padding: 6px 12px; border-radius: 6px;
+            font-size: 12px; font-weight: 500; cursor: pointer;
+            transition: all 0.2s; z-index: 10;
+            font-family: 'Source Sans 3', system-ui, sans-serif;
+        }
+        .copy-btn:hover { background: rgba(255,255,255,0.2); }
+        .copy-btn.copied { background: rgba(16,185,129,0.3); border-color: rgba(16,185,129,0.5); color: #86efac; }
        .code-tabs {
            display: flex; gap: 4px; margin-bottom: 12px;
            border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0;
@@ -314,6 +325,7 @@
 
            <!-- Python -->
            <div class="code-block" id="code-python-sync">
+               <button class="copy-btn" onclick="copyCode(this)">Copy</button>
                <code><span class="cmt">from openai import OpenAI</span>
 
 <span class="kw">client</span> = <span class="fn">OpenAI</span>(base_url=<span class="str">"https://27c.site/v1"</span>, api_key=<span class="str">"any"</span>)
@@ -325,6 +337,7 @@
 
 <span class="fn">print</span>(response.choices[<span class="num">0</span>].message.content)</code></div>
            <div class="code-block hidden" id="code-python-stream">
+               <button class="copy-btn" onclick="copyCode(this)">Copy</button>
                <code><span class="cmt">from openai import OpenAI</span>
 
 <span class="kw">client</span> = <span class="fn">OpenAI</span>(base_url=<span class="str">"https://27c.site/v1"</span>, api_key=<span class="str">"any"</span>)
@@ -341,6 +354,7 @@
 
            <!-- JavaScript -->
            <div class="code-block hidden" id="code-js-sync">
+               <button class="copy-btn" onclick="copyCode(this)">Copy</button>
                <code><span class="kw">import</span> OpenAI <span class="kw">from</span> <span class="str">"openai"</span>;
 
 <span class="kw">const</span> client = <span class="kw">new</span> <span class="fn">OpenAI</span>({
@@ -355,6 +369,7 @@
 
 console.<span class="fn">log</span>(res.choices[<span class="num">0</span>].message.content);</code></div>
            <div class="code-block hidden" id="code-js-stream">
+               <button class="copy-btn" onclick="copyCode(this)">Copy</button>
                <code><span class="kw">import</span> OpenAI <span class="kw">from</span> <span class="str">"openai"</span>;
 
 <span class="kw">const</span> client = <span class="kw">new</span> <span class="fn">OpenAI</span>({
@@ -375,6 +390,7 @@ console.<span class="fn">log</span>(res.choices[<span class="num">0</span>].mess
 
            <!-- Go -->
            <div class="code-block hidden" id="code-go-sync">
+               <button class="copy-btn" onclick="copyCode(this)">Copy</button>
                <code><span class="kw">package</span> main
 
 <span class="kw">import</span> (
@@ -399,6 +415,7 @@ console.<span class="fn">log</span>(res.choices[<span class="num">0</span>].mess
    fmt.<span class="fn">Println</span>(resp.Choices[<span class="num">0</span>].Message.Content)
 }</code></div>
            <div class="code-block hidden" id="code-go-stream">
+               <button class="copy-btn" onclick="copyCode(this)">Copy</button>
                <code><span class="kw">package</span> main
 
 <span class="kw">import</span> (
@@ -431,6 +448,7 @@ console.<span class="fn">log</span>(res.choices[<span class="num">0</span>].mess
 
             <!-- cURL -->
             <div class="code-block hidden" id="code-curl-sync">
+               <button class="copy-btn" onclick="copyCode(this)">Copy</button>
                 <code><span class="kw">curl</span> https://27c.site/v1/chat/completions <span class="punc">\</span>
   -H <span class="str">"Content-Type: application/json"</span> <span class="punc">\</span>
   -d <span class="str">'{
@@ -438,6 +456,7 @@ console.<span class="fn">log</span>(res.choices[<span class="num">0</span>].mess
     "messages": [{"role": "user", "content": "Hello!"}]
   }'</span></code></div>
             <div class="code-block hidden" id="code-curl-stream">
+               <button class="copy-btn" onclick="copyCode(this)">Copy</button>
                 <code><span class="kw">curl</span> https://27c.site/v1/chat/completions <span class="punc">\</span>
   -H <span class="str">"Content-Type: application/json"</span> <span class="punc">\</span>
   -d <span class="str">'{
@@ -487,7 +506,7 @@ console.<span class="fn">log</span>(res.choices[<span class="num">0</span>].mess
             currentLang = lang;
             document.querySelectorAll('.code-tab').forEach(t => t.classList.remove('active'));
             event.target.classList.add('active');
-            updateCode();
+                updateCode();
         }
         function setMode(mode) {
             currentMode = mode;
@@ -504,6 +523,15 @@ console.<span class="fn">log</span>(res.choices[<span class="num">0</span>].mess
             document.querySelectorAll('.code-block[id^="code-"]').forEach(b => b.classList.add('hidden'));
             const el = document.getElementById('code-' + currentLang + '-' + currentMode);
             if (el) el.classList.remove('hidden');
+        }
+        function copyCode(btn) {
+            const code = btn.parentElement.querySelector('code');
+            const text = code.textContent;
+            navigator.clipboard.writeText(text).then(() => {
+                btn.textContent = 'Copied!';
+                btn.classList.add('copied');
+                setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+            });
         }
     </script>
 </body>
