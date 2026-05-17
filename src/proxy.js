@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 import { loadAuth } from './auth.js';
 import { markAccountUnavailable } from './accountStatus.js';
 import { recordUsage, clearUsage } from './usageTracker.js';
+import { refreshTokenByAccountId, isTokenExpiringSoon } from './tokenRefresh.js';
 
 const BACKEND_URL = 'https://chatgpt.com/backend-api/codex/responses';
 
@@ -269,9 +270,6 @@ function pipeStreamToOpenAI(backendStream, res, model, id, opts = {}) {
 }
 
 /**
- * 调用 Codex 后端（仅支持 Codex token，不支持纯 api_key 调此接口）
- */
-/**
  * 解析认证：authProvider 可为路径字符串、auth 对象、或 () => auth 的 getter
  */
 function resolveAuth(authProvider) {
@@ -280,25 +278,65 @@ function resolveAuth(authProvider) {
   return loadAuth(authProvider);
 }
 
+/**
+ * 调用 Codex 后端（仅支持 Codex token，不支持纯 api_key 调此接口）
+ * 支持自动刷新 token：预检查过期 + 401/403 自动刷新重试
+ */
 export async function callCodexBackend(openaiReq, authProvider = null) {
   const auth = resolveAuth(authProvider);
   if (auth.type !== 'codex') {
     throw new Error('ChatGPT/Codex 反代需要 access_token + account_id，请使用 Codex 登录后的 auth.json');
   }
+
+  // ── 预检查：token 是否即将过期，提前刷新 ──
+  let currentToken = auth.accessToken;
+  if (isTokenExpiringSoon(currentToken) && auth.accountId) {
+    const refreshed = await refreshTokenByAccountId(auth.accountId);
+    if (refreshed) {
+      currentToken = refreshed.accessToken;
+      auth.accessToken = currentToken;
+    }
+  }
+
   const body = await buildResponsesRequest(openaiReq);
   const sessionId = randomUUID();
-  const headers = {
+
+  // ── 第一次请求 ──
+  let headers = {
     ...BROWSER_HEADERS,
     'Content-Type': 'application/json',
-    'Authorization': `Bearer ${auth.accessToken}`,
+    'Authorization': `Bearer ${currentToken}`,
     'chatgpt-account-id': auth.accountId,
     'session_id': sessionId,
   };
-  const res = await fetch(BACKEND_URL, {
+  let res = await fetch(BACKEND_URL, {
     method: 'POST',
     headers,
     body: JSON.stringify(body),
   });
+
+  // ── 401/403 → 刷新 token 重试一次 ──
+  if ((res.status === 401 || res.status === 403) && auth.accountId) {
+    const refreshed = await refreshTokenByAccountId(auth.accountId);
+    if (refreshed && refreshed.accessToken !== currentToken) {
+      console.log(`[TokenRefresh] ${auth.accountId.slice(0, 8)}… token 已刷新，重试请求`);
+      headers = {
+        ...BROWSER_HEADERS,
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${refreshed.accessToken}`,
+        'chatgpt-account-id': auth.accountId,
+        'session_id': randomUUID(),
+      };
+      res = await fetch(BACKEND_URL, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+      });
+      // 更新 auth 对象供后续调用使用
+      auth.accessToken = refreshed.accessToken;
+    }
+  }
+
   if (!res.ok) {
     const status = res.status;
     if (status === 401 || status === 403) {
@@ -332,7 +370,7 @@ export async function handleChatCompletions(openaiReq, res, authProvider = null,
       const provider = auth ? () => auth : authProvider;
       const { response: backendRes, model: backendModel, auth: usedAuth } = await callCodexBackend(openaiReq, provider);
       const who = usedAuth || auth;
-      const promptTokens = estimatePromptTokens(openaiReq);
+      const promptTokens = await estimatePromptTokens(openaiReq);
       if (stream) {
         res.setHeader('Content-Type', 'text/event-stream');
         res.setHeader('Cache-Control', 'no-cache');

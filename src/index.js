@@ -17,6 +17,7 @@ import {
 import { getAuthorizeUrl, exchangeCodeForToken } from './oauth.js';
 import { isAccountUnavailable } from './accountStatus.js';
 import { getRemainingPct, getUsedTokens, QUOTA } from './usageTracker.js';
+import { generateImage, getCachedImage, fetchImageBytes } from './imagegen.js';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const app = express();
@@ -192,8 +193,8 @@ app.get('/auth/callback', async (req, res) => {
     return;
   }
   try {
-    const { access_token, account_id, email } = await exchangeCodeForToken(code, redirectUri, state);
-    addAccount({ access_token, account_id, source: 'oauth', name: email || undefined });
+    const { access_token, account_id, refresh_token, email } = await exchangeCodeForToken(code, redirectUri, state);
+    addAccount({ access_token, account_id, refresh_token, source: 'oauth', name: email || undefined });
     refreshAuthProvider();
     res.redirect(302, '/?oauth=success');
   } catch (e) {
@@ -210,11 +211,10 @@ app.get('/v1/models', (req, res) => {
   res.json({
     object: 'list',
     data: [
+      { id: 'gpt-5.5', object: 'model', created: 1687882411, owned_by: 'openai' },
+      { id: 'gpt-5.4', object: 'model', created: 1687882411, owned_by: 'openai' },
       { id: 'gpt-5.3-codex', object: 'model', created: 1687882411, owned_by: 'openai' },
-      { id: 'gpt-5.2-codex', object: 'model', created: 1687882411, owned_by: 'openai' },
-      { id: 'gpt-5-codex', object: 'model', created: 1687882411, owned_by: 'openai' },
-      { id: 'gpt-5', object: 'model', created: 1687882411, owned_by: 'openai' },
-      { id: 'gpt-4', object: 'model', created: 1687882411, owned_by: 'openai' },
+      { id: 'gpt-5.2', object: 'model', created: 1687882411, owned_by: 'openai' },
     ],
   });
 });
@@ -385,6 +385,58 @@ app.patch('/api/settings', (req, res) => {
     res.json({ ok: true, api_key: current.api_key });
   } catch (e) {
     res.status(500).json({ error: e.message });
+  }
+});
+
+// ── 图像生成 ──
+app.post('/v1/images/generations', async (req, res) => {
+  try {
+    const auths = loadAccountsForProxy();
+    if (auths.length === 0) {
+      return res.status(400).json({ error: { message: '未配置账号，请先添加 Codex 账号' } });
+    }
+    // 选第一个可用账号
+    let auth = null;
+    for (const a of auths) {
+      if (!isAccountUnavailable(a.accountId)) { auth = a; break; }
+    }
+    if (!auth) {
+      return res.status(503).json({ error: { message: '所有账号不可用' } });
+    }
+    const result = await generateImage(req.body, auth);
+    // 将 _token 替换为本地代理 URL
+    const host = req.get('host') || `localhost:${PORT}`;
+    const proto = (req.get('x-forwarded-proto') || 'http').split(',')[0].trim();
+    for (const item of result.data) {
+      if (item._token) {
+        item.url = `${proto}://${host}/p/img/${item._token}`;
+        delete item._token;
+      }
+    }
+    res.json(result);
+  } catch (e) {
+    console.error('[ImageGen] 错误:', e.message);
+    res.status(500).json({ error: { message: e.message } });
+  }
+});
+
+// ── 图片代理端点 ──
+app.get('/p/img/:token', async (req, res) => {
+  try {
+    const cached = getCachedImage(req.params.token);
+    if (!cached) {
+      return res.status(404).json({ error: '图片不存在或已过期' });
+    }
+    const imgBase64 = await fetchImageBytes(
+      cached.signedURL, cached.authToken, cached.accountId, cached.deviceId, cached.sessionId
+    );
+    const buf = Buffer.from(imgBase64, 'base64');
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'public, max-age=1800');
+    res.send(buf);
+  } catch (e) {
+    console.error('[ImageProxy] 错误:', e.message);
+    res.status(502).json({ error: e.message });
   }
 });
 

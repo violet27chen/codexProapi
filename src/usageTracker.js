@@ -126,7 +126,25 @@ export function getAllImageQuotas() {
 // ── 本地生图额度追踪（因 chatRequirements 不返回 limits_progress）──
 
 const DEFAULT_IMAGE_DAILY_QUOTA = Number(process.env.IMAGE_DAILY_QUOTA) || 5;
+const IMAGE_USAGE_FILE = join(dataDir, 'image_usage.json');
 let dailyImageCount = {}; // { accountId: { date: 'YYYY-MM-DD', count: N } }
+
+function loadImageUsage() {
+  try {
+    if (existsSync(IMAGE_USAGE_FILE)) {
+      return JSON.parse(readFileSync(IMAGE_USAGE_FILE, 'utf8'));
+    }
+  } catch (_) {}
+  return {};
+}
+
+function saveImageUsage(data) {
+  try {
+    const dir = dirname(IMAGE_USAGE_FILE);
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    writeFileSync(IMAGE_USAGE_FILE, JSON.stringify(data, null, 2), 'utf8');
+  } catch (e) {}
+}
 
 /**
  * 记录一次生图成功，返回剩余次数
