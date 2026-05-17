@@ -1,465 +1,483 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CodexPro API - 免费AI接口服务</title>
-    <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@300;400;500;600&family=Source+Code+Pro:wght@400;500;700&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --purple: #533afd;
-            --purple-hover: #4434d4;
-            --navy: #0a1628;
-            --slate: #4a5568;
-            --border: #e2e8f0;
-            --white: #ffffff;
-            --bg: #f7fafc;
-            --success: #10b981;
-            --success-text: #047857;
-            --dark-section: #0f172a;
-        }
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: 'Source Sans 3', system-ui, -apple-system, sans-serif;
-            color: var(--navy);
-            background: var(--white);
-        }
-        nav {
-            position: sticky; top: 0; z-index: 100;
-            background: rgba(255,255,255,0.95);
-            backdrop-filter: blur(12px);
-            border-bottom: 1px solid var(--border);
-            padding: 16px 0;
-        }
-        .nav-inner {
-            max-width: 1080px; margin: 0 auto; padding: 0 24px;
-            display: flex; align-items: center; justify-content: space-between;
-        }
-        .logo { font-size: 22px; font-weight: 600; color: var(--navy); letter-spacing: -0.5px; }
-        .logo span { color: var(--purple); }
-        .nav-links { display: flex; gap: 32px; align-items: center; }
-        .nav-links a { font-size: 15px; color: var(--slate); text-decoration: none; font-weight: 500; }
-        .nav-links a:hover { color: var(--purple); }
-        .btn-primary {
-            background: transparent; color: #4338ca; border: 2px solid #4338ca;
-            padding: 10px 24px; border-radius: 6px; border: none; box-shadow: 0 2px 8px rgba(67,56,202,0.4);
-            font-size: 15px; font-weight: 600; cursor: pointer;
-            text-decoration: none; display: inline-block;
-            transition: background 0.2s;
-        }
-        .btn-primary:hover { background: var(--purple-hover); }
-        .btn-ghost {
-            background: transparent; color: var(--purple);
-            padding: 10px 24px; border-radius: 6px;
-            border: 2px solid var(--purple);
-            font-size: 15px; font-weight: 600; cursor: pointer;
-            text-decoration: none; display: inline-block;
-            transition: all 0.2s;
-        }
-        .btn-ghost:hover { background: rgba(83,58,253,0.08); }
-        .hero {
-            max-width: 1080px; margin: 0 auto; padding: 80px 24px 60px;
-            text-align: center;
-        }
-        .badge {
-            display: inline-block; background: rgba(16,185,129,0.12);
-            color: var(--success-text); padding: 6px 16px;
-            border-radius: 20px; font-size: 14px; font-weight: 600;
-            margin-bottom: 24px;
-            border: 1px solid rgba(16,185,129,0.3);
-        }
-        h1 {
-            font-size: 52px; font-weight: 300; line-height: 1.1;
-            letter-spacing: -1.5px; color: var(--navy);
-            margin-bottom: 20px;
-        }
-        .subtitle {
-            font-size: 18px; font-weight: 400; line-height: 1.6;
-            color: var(--slate); max-width: 620px; margin: 0 auto 36px;
-        }
-        .cta-group { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
-        .models-bar {
-            display: flex; gap: 10px; justify-content: center;
-            flex-wrap: wrap; margin-top: 40px;
-        }
-        .model-pill {
-            background: var(--bg); border: 1px solid var(--border);
-            padding: 8px 16px; border-radius: 6px;
-            font-size: 14px; color: var(--slate); font-weight: 500;
-            font-family: 'Source Code Pro', monospace;
-        }
-        .features {
-            max-width: 1080px; margin: 0 auto;
-            padding: 60px 24px;
-            display: grid; grid-template-columns: repeat(3, 1fr);
-            gap: 24px;
-        }
-        .feature-card {
-            background: var(--white);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 32px 28px;
-            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03);
-            transition: box-shadow 0.3s, transform 0.3s;
-        }
-        .feature-card:hover {
-            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -5px rgba(0,0,0,0.04);
-            transform: translateY(-2px);
-        }
-        .feature-icon {
-            width: 48px; height: 48px; border-radius: 10px;
-            background: rgba(83,58,253,0.1);
-            display: flex; align-items: center; justify-content: center;
-            margin-bottom: 20px;
-        }
-        .feature-icon svg { width: 24px; height: 24px; color: var(--purple); }
-        .feature-card h3 {
-            font-size: 20px; font-weight: 600; color: var(--navy);
-            margin-bottom: 10px; letter-spacing: -0.3px;
-        }
-        .feature-card p { font-size: 16px; font-weight: 400; color: var(--slate); line-height: 1.6; }
-        .code-section {
-            max-width: 1080px; margin: 0 auto; padding: 0 24px 60px;
-        }
-        .code-card {
-            background: var(--navy);
-            border-radius: 12px; padding: 48px;
-            box-shadow: 0 20px 40px -10px rgba(10,22,40,0.4);
-        }
-        .code-card h2 {
-            font-size: 32px; font-weight: 300; color: var(--white);
-            letter-spacing: -0.6px; margin-bottom: 12px;
-        }
-        .code-card .sub { font-size: 16px; color: rgba(255,255,255,0.7); margin-bottom: 28px; }
-        .code-block {
-            background: rgba(0,0,0,0.35); border-radius: 8px;
-            padding: 24px; overflow-x: auto;
-            border: 1px solid rgba(255,255,255,0.1);
-        }
-        .code-block code {
-            font-family: 'Source Code Pro', monospace;
-            font-size: 14px; line-height: 1.8;
-            color: #e2e8f0;
-        }
-        .code-block .kw { color: #a78bfa; }
-        .code-block .str { color: #86efac; }
-        .code-block .punc { color: rgba(255,255,255,0.5); }
-        .code-block .cmt { color: #64748b; }
-        .code-block .fn { color: #67e8f9; }
-        .code-block .num { color: #f9a8d4; }
-        .code-block.hidden { display: none; }
-        .code-tabs {
-            display: flex; gap: 4px; margin-bottom: 12px;
-            border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0;
-        }
-        .code-tab {
-            background: transparent; border: none; color: rgba(255,255,255,0.5);
-            padding: 10px 20px; font-size: 14px; font-weight: 500; cursor: pointer;
-            border-bottom: 2px solid transparent; transition: all 0.2s;
-            font-family: 'Source Sans 3', system-ui, sans-serif;
-        }
-        .code-tab:hover { color: rgba(255,255,255,0.8); }
-        .code-tab.active { color: #a78bfa; border-bottom-color: #a78bfa; }
-        .code-mode-toggle {
-            display: flex; gap: 4px; margin-bottom: 16px;
-        }
-        .mode-btn {
-            background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
-            color: rgba(255,255,255,0.5); padding: 6px 16px; border-radius: 6px;
-            font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s;
-            font-family: 'Source Sans 3', system-ui, sans-serif;
-        }
-        .mode-btn:hover { color: rgba(255,255,255,0.8); border-color: rgba(255,255,255,0.2); }
-        .mode-btn.active { background: rgba(167,139,250,0.15); border-color: rgba(167,139,250,0.4); color: #a78bfa; }
-        .dark-section {
-            background: var(--dark-section);
-            padding: 80px 24px;
-        }
-        .dark-inner {
-            max-width: 1080px; margin: 0 auto;
-            display: grid; grid-template-columns: 1fr 1fr;
-            gap: 60px; align-items: center;
-        }
-        .dark-section h2 {
-            font-size: 40px; font-weight: 300; color: var(--white);
-            letter-spacing: -1px; margin-bottom: 20px;
-        }
-        .dark-section p {
-            font-size: 17px; font-weight: 400; color: rgba(255,255,255,0.75);
-            line-height: 1.7;
-        }
-        .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-        .stat-card {
-            background: rgba(255,255,255,0.06);
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 10px; padding: 28px;
-        }
-        .stat-card .num {
-            font-size: 36px; font-weight: 300; color: var(--white);
-            letter-spacing: -0.5px;
-        }
-        .stat-card .label {
-            font-size: 14px; color: rgba(255,255,255,0.6); margin-top: 6px;
-        }
-        footer {
-            max-width: 1080px; margin: 0 auto;
-            padding: 40px 24px;
-            display: flex; justify-content: space-between;
-            align-items: center; border-top: 1px solid var(--border);
-        }
-        footer p { font-size: 14px; color: var(--slate); }
-        footer a { color: var(--purple); text-decoration: none; font-weight: 500; }
-        @media (max-width: 768px) {
-            h1 { font-size: 36px; letter-spacing: -0.8px; }
-            .features { grid-template-columns: 1fr; }
-            .dark-inner { grid-template-columns: 1fr; }
-            .nav-links { display: none; }
-            .code-card { padding: 32px 24px; }
-            .code-tabs { overflow-x: auto; flex-wrap: nowrap; }
-            .code-tab { padding: 8px 14px; font-size: 13px; white-space: nowrap; }
-        }
-    </style>
-</head>
-<body>
-    <nav>
-        <div class="nav-inner">
-            <div class="logo">Codex<span>Pro</span></div>
-            <div class="nav-links">
-                <a href="#features">Features</a>
-                <a href="#docs">Docs</a>
-                <a href="https://27c.site/v1/models" class="btn-primary">Start now</a>
-            </div>
-        </div>
-    </nav>
-
-    <section class="hero">
-        <div class="badge">Free and open to everyone</div>
-        <h1>AI API, no strings attached</h1>
-        <p class="subtitle">
-            Free access to GPT-5.5, GPT-5.4, and more. OpenAI-compatible API format. No signup, no limits, no credit card.
-        </p>
-        <div class="cta-group">
-            <a href="https://27c.site/v1/chat/completions" class="btn-primary">Get API endpoint</a>
-            <a href="#docs" class="btn-ghost">View docs</a>
-        </div>
-        <div class="models-bar">
-            <span class="model-pill">gpt-5.5</span>
-            <span class="model-pill">gpt-5.4</span>
-            <span class="model-pill">gpt-5.3-codex</span>
-            <span class="model-pill">gpt-5.2</span>
-            <span class="model-pill">gpt-image-2</span>
-        </div>
-    </section>
-
-    <section class="features" id="features">
-        <div class="feature-card">
-            <div class="feature-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-            </div>
-            <h3>Chat completions</h3>
-            <p>Full OpenAI-compatible chat API. Drop-in replacement for any OpenAI SDK or client library.</p>
-        </div>
-        <div class="feature-card">
-            <div class="feature-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
-            </div>
-            <h3>Image generation</h3>
-            <p>Generate images with GPT-4o. Text-to-image via the standard images endpoint.</p>
-        </div>
-        <div class="feature-card">
-            <div class="feature-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/><path d="M21 3v6h-6"/></svg>
-            </div>
-            <h3>Auto token refresh</h3>
-            <p>Tokens refresh automatically. 24/7 uptime with zero maintenance required.</p>
-        </div>
-    </section>
-
-    <section class="code-section" id="docs">
-        <div class="code-card">
-            <h2>Quick start</h2>
-            <p class="sub">Works with any OpenAI-compatible client. Just point your base URL here.</p>
-            <!-- Language tabs -->
-            <div class="code-tabs">
-                <button class="code-tab active" onclick="showCode('python')">Python</button>
-                <button class="code-tab" onclick="showCode('js')">JavaScript</button>
-                <button class="code-tab" onclick="showCode('go')">Go</button>
-                <button class="code-tab" onclick="showCode('curl')">cURL</button>
-            </div>
-            <!-- Mode toggle -->
-            <div class="code-mode-toggle">
-                <button class="mode-btn active" onclick="setMode('sync')">Non-streaming</button>
-                <button class="mode-btn" onclick="setMode('stream')">Streaming</button>
-            </div>
-
-            <!-- Python -->
-            <div class="code-block" id="code-python-sync">
-                <code><span class="cmt">from openai import OpenAI</span>
-
-<span class="kw">client</span> = <span class="fn">OpenAI</span>(base_url=<span class="str">"https://27c.site/v1"</span>, api_key=<span class="str">"any"</span>)
-
-<span class="kw">response</span> = client.chat.completions.<span class="fn">create</span>(
-    model=<span class="str">"gpt-5.5"</span>,
-    messages=[{<span class="str">"role"</span>: <span class="str">"user"</span>, <span class="str">"content"</span>: <span class="str">"Hello!"</span>}]
-)
-
-<span class="fn">print</span>(response.choices[<span class="num">0</span>].message.content)</code></div>
-            <div class="code-block hidden" id="code-python-stream">
-                <code><span class="cmt">from openai import OpenAI</span>
-
-<span class="kw">client</span> = <span class="fn">OpenAI</span>(base_url=<span class="str">"https://27c.site/v1"</span>, api_key=<span class="str">"any"</span>)
-
-<span class="kw">stream</span> = client.chat.completions.<span class="fn">create</span>(
-    model=<span class="str">"gpt-5.5"</span>,
-    messages=[{<span class="str">"role"</span>: <span class="str">"user"</span>, <span class="str">"content"</span>: <span class="str">"Hello!"</span>}],
-    stream=<span class="num">True</span>
-)
-
-<span class="kw">for</span> chunk <span class="kw">in</span> stream:
-    <span class="kw">if</span> chunk.choices[<span class="num">0</span>].delta.content:
-        <span class="fn">print</span>(chunk.choices[<span class="num">0</span>].delta.content, end=<span class="str">""</span>)</code></div>
-
-            <!-- JavaScript -->
-            <div class="code-block hidden" id="code-js-sync">
-                <code><span class="kw">import</span> OpenAI <span class="kw">from</span> <span class="str">"openai"</span>;
-
-<span class="kw">const</span> client = <span class="kw">new</span> <span class="fn">OpenAI</span>({
-  baseURL: <span class="str">"https://27c.site/v1"</span>,
-  apiKey: <span class="str">"any"</span>,
-});
-
-<span class="kw">const</span> res = <span class="kw">await</span> client.chat.completions.<span class="fn">create</span>({
-  model: <span class="str">"gpt-5.5"</span>,
-  messages: [{ role: <span class="str">"user"</span>, content: <span class="str">"Hello!"</span> }],
-});
-
-console.<span class="fn">log</span>(res.choices[<span class="num">0</span>].message.content);</code></div>
-            <div class="code-block hidden" id="code-js-stream">
-                <code><span class="kw">import</span> OpenAI <span class="kw">from</span> <span class="str">"openai"</span>;
-
-<span class="kw">const</span> client = <span class="kw">new</span> <span class="fn">OpenAI</span>({
-  baseURL: <span class="str">"https://27c.site/v1"</span>,
-  apiKey: <span class="str">"any"</span>,
-});
-
-<span class="kw">const</span> stream = <span class="kw">await</span> client.chat.completions.<span class="fn">create</span>({
-  model: <span class="str">"gpt-5.5"</span>,
-  messages: [{ role: <span class="str">"user"</span>, content: <span class="str">"Hello!"</span> }],
-  stream: <span class="num">true</span>,
-});
-
-<span class="kw">for await</span> (<span class="kw">const</span> chunk <span class="kw">of</span> stream) {
-  <span class="kw">const</span> text = chunk.choices[<span class="num">0</span>]?.delta?.content;
-  <span class="kw">if</span> (text) process.stdout.<span class="fn">write</span>(text);
-}</code></div>
-
-            <!-- Go -->
-            <div class="code-block hidden" id="code-go-sync">
-                <code><span class="kw">package</span> main
-
-<span class="kw">import</span> (
-    <span class="str">"context"</span>
-    <span class="str">"fmt"</span>
-    openai <span class="str">"github.com/sashabaranov/go-openai"</span>
-)
-
-<span class="kw">func</span> <span class="fn">main</span>() {
-    client := openai.<span class="fn">NewClient</span>(<span class="str">"any"</span>, <span class="str">"https://27c.site/v1"</span>)
-
-    resp, err := client.Chat.Completions.<span class="fn">Create</span>(
-        context.<span class="fn">Background</span>(),
-        openai.ChatCompletionRequest{
-            Model: <span class="str">"gpt-5.5"</span>,
-            Messages: []openai.ChatCompletionMessage{
-                {Role: openai.ChatMessageRoleUser, Content: <span class="str">"Hello!"</span>},
-            },
-        },
-    )
-    <span class="kw">if</span> err != <span class="num">nil</span> { <span class="kw">panic</span>(err) }
-    fmt.<span class="fn">Println</span>(resp.Choices[<span class="num">0</span>].Message.Content)
-}</code></div>
-            <div class="code-block hidden" id="code-go-stream">
-                <code><span class="kw">package</span> main
-
-<span class="kw">import</span> (
-    <span class="str">"fmt"</span>
-    <span class="str">"os"</span>
-    openai <span class="str">"github.com/sashabaranov/go-openai"</span>
-)
-
-<span class="kw">func</span> <span class="fn">main</span>() {
-    client := openai.<span class="fn">NewClient</span>(<span class="str">"any"</span>, <span class="str">"https://27c.site/v1"</span>)
-
-    req := openai.ChatCompletionRequest{
-        Model: <span class="str">"gpt-5.5"</span>,
-        Messages: []openai.ChatCompletionMessage{
-            {Role: openai.ChatMessageRoleUser, Content: <span class="str">"Hello!"</span>},
-        },
-        Stream: <span class="num">true</span>,
-    }
-
-    stream, err := client.Chat.Completions.<span class="fn">Create</span>(ctx, req)
-    <span class="kw">if</span> err != <span class="num">nil</span> { <span class="kw">panic</span>(err) }
-    <span class="kw">defer</span> stream.<span class="fn">Close</span>()
-
-    <span class="kw">for</span> {
-        resp, err := stream.<span class="fn">Recv</span>()
-        <span class="kw">if</span> err != <span class="num">nil</span> { <span class="kw">break</span> }
-        fmt.<span class="fn">Print</span>(resp.Choices[<span class="num">0</span>].Delta.Content)
-    }
-}</code></div>
-
+     1|<!DOCTYPE html>
+     2|<html lang="zh-CN">
+     3|<head>
+     4|    <meta charset="UTF-8">
+     5|    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+     6|    <title>CodexPro API - 免费AI接口服务</title>
+     7|    <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@300;400;500;600&family=Source+Code+Pro:wght@400;500;700&display=swap" rel="stylesheet">
+     8|    <style>
+     9|        :root {
+    10|            --purple: #533afd;
+    11|            --purple-hover: #4434d4;
+    12|            --navy: #0a1628;
+    13|            --slate: #4a5568;
+    14|            --border: #e2e8f0;
+    15|            --white: #ffffff;
+    16|            --bg: #f7fafc;
+    17|            --success: #10b981;
+    18|            --success-text: #047857;
+    19|            --dark-section: #0f172a;
+    20|        }
+    21|        * { margin: 0; padding: 0; box-sizing: border-box; }
+    22|        body {
+    23|            font-family: 'Source Sans 3', system-ui, -apple-system, sans-serif;
+    24|            color: var(--navy);
+    25|            background: var(--white);
+    26|        }
+    27|        nav {
+    28|            position: sticky; top: 0; z-index: 100;
+    29|            background: rgba(255,255,255,0.95);
+    30|            backdrop-filter: blur(12px);
+    31|            border-bottom: 1px solid var(--border);
+    32|            padding: 16px 0;
+    33|        }
+    34|        .nav-inner {
+    35|            max-width: 1080px; margin: 0 auto; padding: 0 24px;
+    36|            display: flex; align-items: center; justify-content: space-between;
+    37|        }
+    38|        .logo { font-size: 22px; font-weight: 600; color: var(--navy); letter-spacing: -0.5px; }
+    39|        .logo span { color: var(--purple); }
+    40|        .nav-links { display: flex; gap: 32px; align-items: center; }
+    41|        .nav-links a { font-size: 15px; color: var(--slate); text-decoration: none; font-weight: 500; }
+    42|        .nav-links a:hover { color: var(--purple); }
+    43|        .btn-primary {
+    44|            background: transparent; color: #4338ca; border: 2px solid #4338ca;
+    45|            padding: 10px 24px; border-radius: 6px; border: none; box-shadow: 0 2px 8px rgba(67,56,202,0.4);
+    46|            font-size: 15px; font-weight: 600; cursor: pointer;
+    47|            text-decoration: none; display: inline-block;
+    48|            transition: background 0.2s;
+    49|        }
+    50|        .btn-primary:hover { background: var(--purple-hover); }
+    51|        .btn-ghost {
+    52|            background: transparent; color: var(--purple);
+    53|            padding: 10px 24px; border-radius: 6px;
+    54|            border: 2px solid var(--purple);
+    55|            font-size: 15px; font-weight: 600; cursor: pointer;
+    56|            text-decoration: none; display: inline-block;
+    57|            transition: all 0.2s;
+    58|        }
+    59|        .btn-ghost:hover { background: rgba(83,58,253,0.08); }
+    60|        .hero {
+    61|            max-width: 1080px; margin: 0 auto; padding: 80px 24px 60px;
+    62|            text-align: center;
+    63|        }
+    64|        .badge {
+    65|            display: inline-block; background: rgba(16,185,129,0.12);
+    66|            color: var(--success-text); padding: 6px 16px;
+    67|            border-radius: 20px; font-size: 14px; font-weight: 600;
+    68|            margin-bottom: 24px;
+    69|            border: 1px solid rgba(16,185,129,0.3);
+    70|        }
+    71|        h1 {
+    72|            font-size: 52px; font-weight: 300; line-height: 1.1;
+    73|            letter-spacing: -1.5px; color: var(--navy);
+    74|            margin-bottom: 20px;
+    75|        }
+    76|        .subtitle {
+    77|            font-size: 18px; font-weight: 400; line-height: 1.6;
+    78|            color: var(--slate); max-width: 620px; margin: 0 auto 36px;
+    79|        }
+    80|        .cta-group { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+    81|        .models-bar {
+    82|            display: flex; gap: 10px; justify-content: center;
+    83|            flex-wrap: wrap; margin-top: 40px;
+    84|        }
+    85|        .model-pill {
+    86|            background: var(--bg); border: 1px solid var(--border);
+    87|            padding: 8px 16px; border-radius: 6px;
+    88|            font-size: 14px; color: var(--slate); font-weight: 500;
+    89|            font-family: 'Source Code Pro', monospace;
+    90|        }
+    91|        .features {
+    92|            max-width: 1080px; margin: 0 auto;
+    93|            padding: 60px 24px;
+    94|            display: grid; grid-template-columns: repeat(3, 1fr);
+    95|            gap: 24px;
+    96|        }
+    97|        .feature-card {
+    98|            background: var(--white);
+    99|            border: 1px solid var(--border);
+   100|            border-radius: 8px;
+   101|            padding: 32px 28px;
+   102|            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03);
+   103|            transition: box-shadow 0.3s, transform 0.3s;
+   104|        }
+   105|        .feature-card:hover {
+   106|            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -5px rgba(0,0,0,0.04);
+   107|            transform: translateY(-2px);
+   108|        }
+   109|        .feature-icon {
+   110|            width: 48px; height: 48px; border-radius: 10px;
+   111|            background: rgba(83,58,253,0.1);
+   112|            display: flex; align-items: center; justify-content: center;
+   113|            margin-bottom: 20px;
+   114|        }
+   115|        .feature-icon svg { width: 24px; height: 24px; color: var(--purple); }
+   116|        .feature-card h3 {
+   117|            font-size: 20px; font-weight: 600; color: var(--navy);
+   118|            margin-bottom: 10px; letter-spacing: -0.3px;
+   119|        }
+   120|        .feature-card p { font-size: 16px; font-weight: 400; color: var(--slate); line-height: 1.6; }
+   121|        .code-section {
+   122|            max-width: 1080px; margin: 0 auto; padding: 0 24px 60px;
+   123|        }
+   124|        .code-card {
+   125|            background: var(--navy);
+   126|            border-radius: 12px; padding: 48px;
+   127|            box-shadow: 0 20px 40px -10px rgba(10,22,40,0.4);
+   128|        }
+   129|        .code-card h2 {
+   130|            font-size: 32px; font-weight: 300; color: var(--white);
+   131|            letter-spacing: -0.6px; margin-bottom: 12px;
+   132|        }
+   133|        .code-card .sub { font-size: 16px; color: rgba(255,255,255,0.7); margin-bottom: 28px; }
+   134|        .code-block {
+   135|            background: rgba(0,0,0,0.35); border-radius: 8px;
+   136|            padding: 24px; overflow-x: auto;
+   137|            border: 1px solid rgba(255,255,255,0.1);
+   138|        }
+   139|        .code-block code {
+   140|            font-family: 'Source Code Pro', monospace;
+   141|            font-size: 14px; line-height: 1.8;
+   142|            color: #e2e8f0;
+   143|        }
+   144|        .code-block .kw { color: #a78bfa; }
+   145|        .code-block .str { color: #86efac; }
+   146|        .code-block .punc { color: rgba(255,255,255,0.5); }
+   147|        .code-block .cmt { color: #64748b; }
+   148|        .code-block .fn { color: #67e8f9; }
+   149|        .code-block .num { color: #f9a8d4; }
+   150|        .code-block.hidden { display: none; }
+   151|        .code-tabs {
+   152|            display: flex; gap: 4px; margin-bottom: 12px;
+   153|            border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0;
+   154|        }
+   155|        .code-tab {
+   156|            background: transparent; border: none; color: rgba(255,255,255,0.5);
+   157|            padding: 10px 20px; font-size: 14px; font-weight: 500; cursor: pointer;
+   158|            border-bottom: 2px solid transparent; transition: all 0.2s;
+   159|            font-family: 'Source Sans 3', system-ui, sans-serif;
+   160|        }
+   161|        .code-tab:hover { color: rgba(255,255,255,0.8); }
+   162|        .code-tab.active { color: #a78bfa; border-bottom-color: #a78bfa; }
+   163|        .code-mode-toggle {
+   164|            display: flex; gap: 4px; margin-bottom: 16px;
+   165|        }
+   166|        .mode-btn {
+   167|            background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+   168|            color: rgba(255,255,255,0.5); padding: 6px 16px; border-radius: 6px;
+   169|            font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s;
+   170|            font-family: 'Source Sans 3', system-ui, sans-serif;
+   171|        }
+   172|        .mode-btn:hover { color: rgba(255,255,255,0.8); border-color: rgba(255,255,255,0.2); }
+   173|        .mode-btn.active { background: rgba(167,139,250,0.15); border-color: rgba(167,139,250,0.4); color: #a78bfa; }
+   174|        .code-controls {
+   175|            display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 16px;
+   176|        }
+   177|        .model-select {
+   178|            background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+   179|            color: rgba(255,255,255,0.8); padding: 6px 14px; border-radius: 6px;
+   180|            font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s;
+   181|            font-family: 'Source Code Pro', monospace;
+   182|        }
+   183|        .model-select:hover { border-color: rgba(255,255,255,0.2); }
+   184|        .model-select option { background: #1e293b; color: #e2e8f0; }
+   185|        .dark-section {
+   186|            background: var(--dark-section);
+   187|            padding: 80px 24px;
+   188|        }
+   189|        .dark-inner {
+   190|            max-width: 1080px; margin: 0 auto;
+   191|            display: grid; grid-template-columns: 1fr 1fr;
+   192|            gap: 60px; align-items: center;
+   193|        }
+   194|        .dark-section h2 {
+   195|            font-size: 40px; font-weight: 300; color: var(--white);
+   196|            letter-spacing: -1px; margin-bottom: 20px;
+   197|        }
+   198|        .dark-section p {
+   199|            font-size: 17px; font-weight: 400; color: rgba(255,255,255,0.75);
+   200|            line-height: 1.7;
+   201|        }
+   202|        .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+   203|        .stat-card {
+   204|            background: rgba(255,255,255,0.06);
+   205|            border: 1px solid rgba(255,255,255,0.1);
+   206|            border-radius: 10px; padding: 28px;
+   207|        }
+   208|        .stat-card .num {
+   209|            font-size: 36px; font-weight: 300; color: var(--white);
+   210|            letter-spacing: -0.5px;
+   211|        }
+   212|        .stat-card .label {
+   213|            font-size: 14px; color: rgba(255,255,255,0.6); margin-top: 6px;
+   214|        }
+   215|        footer {
+   216|            max-width: 1080px; margin: 0 auto;
+   217|            padding: 40px 24px;
+   218|            display: flex; justify-content: space-between;
+   219|            align-items: center; border-top: 1px solid var(--border);
+   220|        }
+   221|        footer p { font-size: 14px; color: var(--slate); }
+   222|        footer a { color: var(--purple); text-decoration: none; font-weight: 500; }
+   223|        @media (max-width: 768px) {
+   224|            h1 { font-size: 36px; letter-spacing: -0.8px; }
+   225|            .features { grid-template-columns: 1fr; }
+   226|            .dark-inner { grid-template-columns: 1fr; }
+   227|            .nav-links { display: none; }
+   228|            .code-card { padding: 32px 24px; }
+   229|            .code-tabs { overflow-x: auto; flex-wrap: nowrap; }
+   230|            .code-tab { padding: 8px 14px; font-size: 13px; white-space: nowrap; }
+   231|        }
+   232|    </style>
+   233|</head>
+   234|<body>
+   235|    <nav>
+   236|        <div class="nav-inner">
+   237|            <div class="logo">Codex<span>Pro</span></div>
+   238|            <div class="nav-links">
+   239|                <a href="#features">Features</a>
+   240|                <a href="#docs">Docs</a>
+   241|                <a href="https://27c.site/v1/models" class="btn-primary">Start now</a>
+   242|            </div>
+   243|        </div>
+   244|    </nav>
+   245|
+   246|    <section class="hero">
+   247|        <div class="badge">Free and open to everyone</div>
+   248|        <h1>AI API, no strings attached</h1>
+   249|        <p class="subtitle">
+   250|            Free access to GPT-5.5, GPT-5.4, and more. OpenAI-compatible API format. No signup, no limits, no credit card.
+   251|        </p>
+   252|        <div class="cta-group">
+   253|            <a href="https://27c.site/v1/chat/completions" class="btn-primary">Get API endpoint</a>
+   254|            <a href="#docs" class="btn-ghost">View docs</a>
+   255|        </div>
+   256|        <div class="models-bar">
+   257|            <span class="model-pill">gpt-5.5</span>
+   258|            <span class="model-pill">gpt-5.4</span>
+   259|            <span class="model-pill">gpt-5.3-codex</span>
+   260|            <span class="model-pill">gpt-5.2</span>
+   261|            <span class="model-pill">gpt-image-2</span>
+   262|        </div>
+   263|    </section>
+   264|
+   265|    <section class="features" id="features">
+   266|        <div class="feature-card">
+   267|            <div class="feature-icon">
+   268|                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+   269|            </div>
+   270|            <h3>Chat completions</h3>
+   271|            <p>Full OpenAI-compatible chat API. Drop-in replacement for any OpenAI SDK or client library.</p>
+   272|        </div>
+   273|        <div class="feature-card">
+   274|            <div class="feature-icon">
+   275|                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+   276|            </div>
+   277|            <h3>Image generation</h3>
+   278|            <p>Generate images with GPT-4o. Text-to-image via the standard images endpoint.</p>
+   279|        </div>
+   280|        <div class="feature-card">
+   281|            <div class="feature-icon">
+   282|                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/><path d="M21 3v6h-6"/></svg>
+   283|            </div>
+   284|            <h3>Auto token refresh</h3>
+   285|            <p>Tokens refresh automatically. 24/7 uptime with zero maintenance required.</p>
+   286|        </div>
+   287|    </section>
+   288|
+   289|    <section class="code-section" id="docs">
+   290|        <div class="code-card">
+   291|            <h2>Quick start</h2>
+   292|            <p class="sub">Works with any OpenAI-compatible client. Just point your base URL here.</p>
+   293|            <!-- Language tabs -->
+   294|            <div class="code-tabs">
+   295|                <button class="code-tab active" onclick="showCode('python')">Python</button>
+   296|                <button class="code-tab" onclick="showCode('js')">JavaScript</button>
+   297|                <button class="code-tab" onclick="showCode('go')">Go</button>
+   298|                <button class="code-tab" onclick="showCode('curl')">cURL</button>
+   299|            </div>
+   300|            <!-- Controls -->
+   301|            <div class="code-controls">
+   302|                <select class="model-select" onchange="setModel(this.value)">
+   303|                    <option value="gpt-5.5">gpt-5.5</option>
+   304|                    <option value="gpt-5.4">gpt-5.4</option>
+   305|                    <option value="gpt-5.3-codex">gpt-5.3-codex</option>
+   306|                    <option value="gpt-5.2">gpt-5.2</option>
+   307|                    <option value="gpt-image-2">gpt-image-2</option>
+   308|                </select>
+   309|                <button class="mode-btn active" onclick="setMode('sync')">Non-streaming</button>
+   310|                <button class="mode-btn" onclick="setMode('stream')">Streaming</button>
+   311|            </div>
+   312|
+   313|            <!-- Python -->
+   314|            <div class="code-block" id="code-python-sync">
+   315|                <code><span class="cmt">from openai import OpenAI</span>
+   316|
+   317|<span class="kw">client</span> = <span class="fn">OpenAI</span>(base_url=<span class="str">"https://27c.site/v1"</span>, api_key=<span class="str">"any"</span>)
+   318|
+   319|<span class="kw">response</span> = client.chat.completions.<span class="fn">create</span>(
+   320|    model=<span class="str" data-model>gpt-5.5</span>,
+   321|    messages=[{<span class="str">"role"</span>: <span class="str">"user"</span>, <span class="str">"content"</span>: <span class="str">"Hello!"</span>}]
+   322|)
+   323|
+   324|<span class="fn">print</span>(response.choices[<span class="num">0</span>].message.content)</code></div>
+   325|            <div class="code-block hidden" id="code-python-stream">
+   326|                <code><span class="cmt">from openai import OpenAI</span>
+   327|
+   328|<span class="kw">client</span> = <span class="fn">OpenAI</span>(base_url=<span class="str">"https://27c.site/v1"</span>, api_key=<span class="str">"any"</span>)
+   329|
+   330|<span class="kw">stream</span> = client.chat.completions.<span class="fn">create</span>(
+   331|    model=<span class="str" data-model>gpt-5.5</span>,
+   332|    messages=[{<span class="str">"role"</span>: <span class="str">"user"</span>, <span class="str">"content"</span>: <span class="str">"Hello!"</span>}],
+   333|    stream=<span class="num">True</span>
+   334|)
+   335|
+   336|<span class="kw">for</span> chunk <span class="kw">in</span> stream:
+   337|    <span class="kw">if</span> chunk.choices[<span class="num">0</span>].delta.content:
+   338|        <span class="fn">print</span>(chunk.choices[<span class="num">0</span>].delta.content, end=<span class="str">""</span>)</code></div>
+   339|
+   340|            <!-- JavaScript -->
+   341|            <div class="code-block hidden" id="code-js-sync">
+   342|                <code><span class="kw">import</span> OpenAI <span class="kw">from</span> <span class="str">"openai"</span>;
+   343|
+   344|<span class="kw">const</span> client = <span class="kw">new</span> <span class="fn">OpenAI</span>({
+   345|  baseURL: <span class="str">"https://27c.site/v1"</span>,
+   346|  apiKey: <span class="str">"any"</span>,
+   347|});
+   348|
+   349|<span class="kw">const</span> res = <span class="kw">await</span> client.chat.completions.<span class="fn">create</span>({
+   350|  model: <span class="str" data-model>gpt-5.5</span>,
+   351|  messages: [{ role: <span class="str">"user"</span>, content: <span class="str">"Hello!"</span> }],
+   352|});
+   353|
+   354|console.<span class="fn">log</span>(res.choices[<span class="num">0</span>].message.content);</code></div>
+   355|            <div class="code-block hidden" id="code-js-stream">
+   356|                <code><span class="kw">import</span> OpenAI <span class="kw">from</span> <span class="str">"openai"</span>;
+   357|
+   358|<span class="kw">const</span> client = <span class="kw">new</span> <span class="fn">OpenAI</span>({
+   359|  baseURL: <span class="str">"https://27c.site/v1"</span>,
+   360|  apiKey: <span class="str">"any"</span>,
+   361|});
+   362|
+   363|<span class="kw">const</span> stream = <span class="kw">await</span> client.chat.completions.<span class="fn">create</span>({
+   364|  model: <span class="str" data-model>gpt-5.5</span>,
+   365|  messages: [{ role: <span class="str">"user"</span>, content: <span class="str">"Hello!"</span> }],
+   366|  stream: <span class="num">true</span>,
+   367|});
+   368|
+   369|<span class="kw">for await</span> (<span class="kw">const</span> chunk <span class="kw">of</span> stream) {
+   370|  <span class="kw">const</span> text = chunk.choices[<span class="num">0</span>]?.delta?.content;
+   371|  <span class="kw">if</span> (text) process.stdout.<span class="fn">write</span>(text);
+   372|}</code></div>
+   373|
+   374|            <!-- Go -->
+   375|            <div class="code-block hidden" id="code-go-sync">
+   376|                <code><span class="kw">package</span> main
+   377|
+   378|<span class="kw">import</span> (
+   379|    <span class="str">"context"</span>
+   380|    <span class="str">"fmt"</span>
+   381|    openai <span class="str">"github.com/sashabaranov/go-openai"</span>
+   382|)
+   383|
+   384|<span class="kw">func</span> <span class="fn">main</span>() {
+   385|    client := openai.<span class="fn">NewClient</span>(<span class="str">"any"</span>, <span class="str">"https://27c.site/v1"</span>)
+   386|
+   387|    resp, err := client.Chat.Completions.<span class="fn">Create</span>(
+   388|        context.<span class="fn">Background</span>(),
+   389|        openai.ChatCompletionRequest{
+   390|            Model: <span class="str" data-model>gpt-5.5</span>,
+   391|            Messages: []openai.ChatCompletionMessage{
+   392|                {Role: openai.ChatMessageRoleUser, Content: <span class="str">"Hello!"</span>},
+   393|            },
+   394|        },
+   395|    )
+   396|    <span class="kw">if</span> err != <span class="num">nil</span> { <span class="kw">panic</span>(err) }
+   397|    fmt.<span class="fn">Println</span>(resp.Choices[<span class="num">0</span>].Message.Content)
+   398|}</code></div>
+   399|            <div class="code-block hidden" id="code-go-stream">
+   400|                <code><span class="kw">package</span> main
+   401|
+   402|<span class="kw">import</span> (
+   403|    <span class="str">"fmt"</span>
+   404|    <span class="str">"os"</span>
+   405|    openai <span class="str">"github.com/sashabaranov/go-openai"</span>
+   406|)
+   407|
+   408|<span class="kw">func</span> <span class="fn">main</span>() {
+   409|    client := openai.<span class="fn">NewClient</span>(<span class="str">"any"</span>, <span class="str">"https://27c.site/v1"</span>)
+   410|
+   411|    req := openai.ChatCompletionRequest{
+   412|        Model: <span class="str" data-model>gpt-5.5</span>,
+   413|        Messages: []openai.ChatCompletionMessage{
+   414|            {Role: openai.ChatMessageRoleUser, Content: <span class="str">"Hello!"</span>},
+   415|        },
+   416|        Stream: <span class="num">true</span>,
+   417|    }
+   418|
+   419|    stream, err := client.Chat.Completions.<span class="fn">Create</span>(ctx, req)
+   420|    <span class="kw">if</span> err != <span class="num">nil</span> { <span class="kw">panic</span>(err) }
+   421|    <span class="kw">defer</span> stream.<span class="fn">Close</span>()
+   422|
+   423|    <span class="kw">for</span> {
+   424|        resp, err := stream.<span class="fn">Recv</span>()
+   425|        <span class="kw">if</span> err != <span class="num">nil</span> { <span class="kw">break</span> }
+   426|        fmt.<span class="fn">Print</span>(resp.Choices[<span class="num">0</span>].Delta.Content)
+   427|    }
+   428|}</code></div>
+   429|
             <!-- cURL -->
             <div class="code-block hidden" id="code-curl-sync">
                 <code><span class="kw">curl</span> https://27c.site/v1/chat/completions <span class="punc">\</span>
   -H <span class="str">"Content-Type: application/json"</span> <span class="punc">\</span>
   -d <span class="str">'{
-    "model": "gpt-5.5",
+    "model": </span><span class="str" data-model>gpt-5.5</span><span class="str">,
     "messages": [{"role": "user", "content": "Hello!"}]
   }'</span></code></div>
             <div class="code-block hidden" id="code-curl-stream">
                 <code><span class="kw">curl</span> https://27c.site/v1/chat/completions <span class="punc">\</span>
   -H <span class="str">"Content-Type: application/json"</span> <span class="punc">\</span>
   -d <span class="str">'{
-    "model": "gpt-5.5",
+    "model": </span><span class="str" data-model>gpt-5.5</span><span class="str">,
     "messages": [{"role": "user", "content": "Hello!"}],
     "stream": true
   }'</span></code></div>
-
-        </div>
-    </section>
-
-    <section class="dark-section">
-        <div class="dark-inner">
-            <div>
-                <h2>Built for developers</h2>
-                <p>Use your favorite tools. OpenAI SDK, LangChain, LlamaIndex, or raw HTTP requests. Everything just works out of the box.</p>
-            </div>
-            <div class="stat-grid">
-                <div class="stat-card">
-                    <div class="num">7</div>
-                    <div class="label">Active accounts</div>
-                </div>
-                <div class="stat-card">
-                    <div class="num">5</div>
-                    <div class="label">Models available</div>
-                </div>
-                <div class="stat-card">
-                    <div class="num">24/7</div>
-                    <div class="label">Uptime</div>
-                </div>
-                <div class="stat-card">
-                    <div class="num">$0</div>
-                    <div class="label">Cost to you</div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <footer>
-        <p>CodexPro API</p>
-        <p><a href="https://27c.site">27c.site</a></p>
-    </footer>
+   446|
+   447|        </div>
+   448|    </section>
+   449|
+   450|    <section class="dark-section">
+   451|        <div class="dark-inner">
+   452|            <div>
+   453|                <h2>Built for developers</h2>
+   454|                <p>Use your favorite tools. OpenAI SDK, LangChain, LlamaIndex, or raw HTTP requests. Everything just works out of the box.</p>
+   455|            </div>
+   456|            <div class="stat-grid">
+   457|                <div class="stat-card">
+   458|                    <div class="num">7</div>
+   459|                    <div class="label">Active accounts</div>
+   460|                </div>
+   461|                <div class="stat-card">
+   462|                    <div class="num">5</div>
+   463|                    <div class="label">Models available</div>
+   464|                </div>
+   465|                <div class="stat-card">
+   466|                    <div class="num">24/7</div>
+   467|                    <div class="label">Uptime</div>
+   468|                </div>
+   469|                <div class="stat-card">
+   470|                    <div class="num">$0</div>
+   471|                    <div class="label">Cost to you</div>
+   472|                </div>
+   473|            </div>
+   474|        </div>
+   475|    </section>
+   476|
+   477|    <footer>
+   478|        <p>CodexPro API</p>
+   479|        <p><a href="https://27c.site">27c.site</a></p>
+   480|    </footer>
     <script>
         let currentLang = 'python';
         let currentMode = 'sync';
@@ -475,11 +493,14 @@ console.<span class="fn">log</span>(res.choices[<span class="num">0</span>].mess
             event.target.classList.add('active');
             updateCode();
         }
+        function setModel(model) {
+            document.querySelectorAll('[data-model]').forEach(el => {
+                el.textContent = model;
+            });
+        }
         function updateCode() {
             document.querySelectorAll('.code-block[id^="code-"]').forEach(b => b.classList.add('hidden'));
             const el = document.getElementById('code-' + currentLang + '-' + currentMode);
             if (el) el.classList.remove('hidden');
         }
     </script>
-</body>
-</html>
