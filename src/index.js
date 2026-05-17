@@ -207,6 +207,8 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'codex-proapi' });
 });
 
+app.get('/favicon.ico', (req, res) => res.status(204).end());
+
 app.get('/v1/models', (req, res) => {
   res.json({
     object: 'list',

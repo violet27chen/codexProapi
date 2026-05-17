@@ -429,22 +429,22 @@ console.<span class="fn">log</span>(res.choices[<span class="num">0</span>].mess
    }
 }</code></div>
 
-   430|            <!-- cURL -->
-   431|            <div class="code-block hidden" id="code-curl-sync">
-   432|                <code><span class="kw">curl</span> https://27c.site/v1/chat/completions <span class="punc">\</span>
-   433|  -H <span class="str">"Content-Type: application/json"</span> <span class="punc">\</span>
-   434|  -d <span class="str">'{
-   435|    "model": </span><span class="str" data-model>gpt-5.5</span><span class="str">,
-   436|    "messages": [{"role": "user", "content": "Hello!"}]
-   437|  }'</span></code></div>
-   438|            <div class="code-block hidden" id="code-curl-stream">
-   439|                <code><span class="kw">curl</span> https://27c.site/v1/chat/completions <span class="punc">\</span>
-   440|  -H <span class="str">"Content-Type: application/json"</span> <span class="punc">\</span>
-   441|  -d <span class="str">'{
-   442|    "model": </span><span class="str" data-model>gpt-5.5</span><span class="str">,
-   443|    "messages": [{"role": "user", "content": "Hello!"}],
-   444|    "stream": true
-   445|  }'</span></code></div>
+            <!-- cURL -->
+            <div class="code-block hidden" id="code-curl-sync">
+                <code><span class="kw">curl</span> https://27c.site/v1/chat/completions <span class="punc">\</span>
+  -H <span class="str">"Content-Type: application/json"</span> <span class="punc">\</span>
+  -d <span class="str">'{
+    "model": </span><span class="str" data-model>gpt-5.5</span><span class="str">,
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'</span></code></div>
+            <div class="code-block hidden" id="code-curl-stream">
+                <code><span class="kw">curl</span> https://27c.site/v1/chat/completions <span class="punc">\</span>
+  -H <span class="str">"Content-Type: application/json"</span> <span class="punc">\</span>
+  -d <span class="str">'{
+    "model": </span><span class="str" data-model>gpt-5.5</span><span class="str">,
+    "messages": [{"role": "user", "content": "Hello!"}],
+    "stream": true
+  }'</span></code></div>
 
        </div>
    </section>
@@ -480,24 +480,31 @@ console.<span class="fn">log</span>(res.choices[<span class="num">0</span>].mess
        <p>CodexPro API</p>
        <p><a href="https://27c.site">27c.site</a></p>
    </footer>
-   481|    <script>
-   482|        let currentLang = 'python';
-   483|        let currentMode = 'sync';
-   484|        function showCode(lang) {
-   485|            currentLang = lang;
-   486|            document.querySelectorAll('.code-tab').forEach(t => t.classList.remove('active'));
-   487|            event.target.classList.add('active');
-   488|            updateCode();
-   489|        }
-   490|        function setMode(mode) {
-   491|            currentMode = mode;
-   492|            document.querySelectorAll('.mode-btn').forEach(t => t.classList.remove('active'));
-   493|            event.target.classList.add('active');
-   494|            updateCode();
-   495|        }
-   496|        function setModel(model) {
-   497|            document.querySelectorAll('[data-model]').forEach(el => {
-   498|                el.textContent = model;
-   499|            });
-   500|        }
-   501|
+    <script>
+        let currentLang = 'python';
+        let currentMode = 'sync';
+        function showCode(lang) {
+            currentLang = lang;
+            document.querySelectorAll('.code-tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            updateCode();
+        }
+        function setMode(mode) {
+            currentMode = mode;
+            document.querySelectorAll('.mode-btn').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            updateCode();
+        }
+        function setModel(model) {
+            document.querySelectorAll('[data-model]').forEach(el => {
+                el.textContent = model;
+            });
+        }
+        function updateCode() {
+            document.querySelectorAll('.code-block[id^="code-"]').forEach(b => b.classList.add('hidden'));
+            const el = document.getElementById('code-' + currentLang + '-' + currentMode);
+            if (el) el.classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
