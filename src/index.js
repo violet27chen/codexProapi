@@ -215,6 +215,7 @@ app.get('/v1/models', (req, res) => {
       { id: 'gpt-5.4', object: 'model', created: 1687882411, owned_by: 'openai' },
       { id: 'gpt-5.3-codex', object: 'model', created: 1687882411, owned_by: 'openai' },
       { id: 'gpt-5.2', object: 'model', created: 1687882411, owned_by: 'openai' },
+      { id: 'gpt-image-2', object: 'model', created: 1687882411, owned_by: 'openai' },
     ],
   });
 });
