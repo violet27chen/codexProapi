@@ -1,8 +1,19 @@
 # Codex Pro API
 
-Exposes **Codex** (gpt-5.5, gpt-5.4, gpt-5.4-mini, gpt-5.3-codex, gpt-image-2, and more) as an **OpenAI-compatible API** so you can use it in Cline, Cursor, or any client that supports OpenAI-style endpoints. Supports **text chat** (`/v1/chat/completions`) and **image generation** (`/v1/images/generations`).
+Exposes Codex (gpt-5.5, gpt-5.4, gpt-5.4-mini, gpt-5.3-codex, gpt-image-2, and more) as an OpenAI-compatible API so you can use it in Cline, Cursor, or any client that supports OpenAI-style endpoints. Supports text chat (/v1/chat/completions) and image generation (/v1/images/generations).
 
-**中文说明请见 [README.zh-CN.md](README.zh-CN.md)。**
+For Chinese documentation, please see README.zh-CN.md.
+
+---
+
+## Core Features
+
+- Multi-Account Round-Robin & Failover: Automatically rotates through configured accounts for requests. If one account fails, the proxy immediately retries the request using the next available account.
+- Independent Account Proxy: Allows configuring a separate proxy server (supporting HTTP, HTTPS, SOCKS) for each individual account. Calls to the Codex backend and token refresh operations will be routed through the bound proxy.
+- Token Auto Refresh: Periodically refreshes OAuth access tokens in the background based on a configurable interval (minimum 5 minutes). Restores failed or rate-limited accounts back to the active pool once their tokens are successfully refreshed.
+- Batch Account Import: Supports importing multiple accounts at once by uploading a text file (.txt) containing a list of Refresh Tokens (one per line) or directly pasting them into the batch import interface.
+- Rich Interactive Dashboard: Manage accounts, configure independent proxies, monitor real-time requests, inspect detailed logs, probe model availability, and view usage statistics.
+- Bilingual Interface: Full support for both English and Simplified Chinese in both the user interface and system logs.
 
 ---
 
@@ -10,17 +21,17 @@ Exposes **Codex** (gpt-5.5, gpt-5.4, gpt-5.4-mini, gpt-5.3-codex, gpt-image-2, a
 
 ![Codex Pro API architecture](architecture-en.png)
 
-*Clients (Cline, Cursor, etc.) call the OpenAI-compatible API; this service round-robins requests using configured Codex accounts and forwards them to the Codex backend (chatgpt.com).*
+Clients (Cline, Cursor, etc.) call the OpenAI-compatible API; this service round-robins requests using configured Codex accounts and forwards them to the Codex backend (chatgpt.com), optionally routing through account-specific proxy servers.
 
 ---
 
 ## Screenshots
 
-**Accounts — add Codex accounts via Login with Codex (OAuth):**
+**Accounts — add Codex accounts via OAuth Login, configure independent proxies, or perform batch imports:**
 
 ![Accounts](accounts.png)
 
-**Models — view available models and quota:**
+**Models — view available models, status, latencies, and quota:**
 
 ![Models](models.png)
 
@@ -32,114 +43,103 @@ Exposes **Codex** (gpt-5.5, gpt-5.4, gpt-5.4-mini, gpt-5.3-codex, gpt-image-2, a
 
 If you prefer not to use the command line:
 
-1. Open [GitHub Releases](https://github.com/violettoolssite/codexProapi/releases).
-2. Pick the latest release (e.g. `v1.0.8`) and download the **Windows installer** from **Assets**: `Codex Pro API Setup x.x.x.exe` (you can choose install path and desktop/Start menu shortcuts).  
-   **Note:** The desktop app is **Windows only** for now; on macOS or Linux, use the command-line option below.
-3. Install and run; the config page opens **inside the app window** (no browser). Closing the app stops the local service. Accounts and data are stored in your local user data directory, separate from the install folder.
+1. Open GitHub Releases at https://github.com/violettoolssite/codexProapi/releases.
+2. Select the latest release and download the Windows installer from Assets: Codex Pro API Setup x.x.x.exe.
+   Note: The desktop app is Windows only for now; on macOS or Linux, use the command-line option below.
+3. Install and run. The configuration panel opens inside the app window. Closing the app stops the local service. All accounts and configuration data are stored in your local user data directory, separate from the installation folder.
 
 ### Option 2: Command line
 
-You need **Node.js** 18 or later. In a terminal:
+Ensure you have Node.js 18 or later installed. Run the following commands in a terminal:
 
 ```bash
 npm install -g codex-proapi
 codex-proapi
 ```
 
-Or run `npm start` from the project directory after `npm install`. Then open **http://localhost:1455/** in your browser. Default port is **1455**; with global install, account and usage data are stored in `~/.codex-proapi/`.
+Or clone the repository, run `npm install` to install dependencies, and then run `npm start`.
+
+Once started, open http://localhost:1455/ in your browser. The default port is 1455. When running globally, configuration and usage statistics are stored under ~/.codex-proapi/.
 
 ---
 
-## Use in your client (Cline, Cursor, etc.)
+## Client Configuration (Cline, Cursor, etc.)
 
-| Setting     | Value |
-|------------|--------|
-| **Base URL** | `http://localhost:1455/v1` (must include `/v1`; or your host/port + `/v1`) |
-| **Model**    | `gpt-5.4` or `gpt-5.5` (see all: `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.3-codex`, `gpt-5.2-codex`, `gpt-5-codex`, `gpt-5`, `gpt-image-2`, `gpt-4`) |
-| **API Key**  | Any value (not validated; auth is from your Codex accounts) |
+Configure your client using the following settings:
 
-**Steps:**
+| Setting | Value |
+|---------|-------|
+| Base URL | http://localhost:1455/v1 (must include /v1; or your custom host/port + /v1) |
+| Model | gpt-5.4, gpt-5.5, or any other supported model (gpt-5.5, gpt-5.4, gpt-5.4-mini, gpt-5.3-codex, gpt-5.2-codex, gpt-5-codex, gpt-5, gpt-image-2, gpt-4) |
+| API Key | Any value (not validated; authentication is derived from your configured accounts) |
 
-1. Add accounts at **http://localhost:1455/** on the Accounts page via **Login with Codex** (or **Add account** → **Paste JSON**).
-2. In your client, set the **Base URL** (must include `/v1`) and **model** as above; API Key can be anything.
-3. Send requests as usual; the proxy will use your configured accounts.
+### Steps:
 
----
-
-## "Region not supported" or access_denied when logging in
-
-If you see **region restriction**, **access_denied**, or similar after clicking "Login with Codex", your region or network may not be supported. You can:
-
-1. **Use a VPN** and try "Login with Codex" again.
-2. **Paste auth.json instead**: On a device where Codex login works (e.g. another computer or a browser with VPN), open `~/.codex/auth.json` (Windows: `%USERPROFILE%\\.codex\\auth.json`), copy its contents, then go to Accounts → Add account → Paste JSON and submit.
-
-The same instructions are shown on the page when this error appears.
-
-### VPN on but still "unsupported region"?
-
-- **Make sure the login page uses the VPN too**: After clicking "Login with Codex" you are redirected to OpenAI’s login; that page must also go through your VPN. If only some apps use the proxy and the browser does not, the login page still sees your real IP. Use system-wide or browser proxy and ensure it’s on before clicking login.
-- **Try another VPN server or provider**: Some servers may still be detected as unsupported, or leak IP/DNS. Try a different node (e.g. US) or another VPN.
-- **Prefer pasting auth.json**: On any environment where Codex login works (e.g. another machine with VPN, or a browser that already logged in with VPN), open `~/.codex/auth.json`, copy its contents, then in Codex Pro API go to Accounts → Add account → Paste JSON. No OAuth on this machine needed.
+1. Add accounts at http://localhost:1455/ on the Accounts page via OAuth login, manual JSON input, or Batch Import.
+2. If needed, click Modify next to the account in the proxy column to bind a dedicated proxy (e.g. http://127.0.0.1:7890).
+3. In your client (Cline, Cursor, etc.), specify the Base URL and model names as described above. Set the API Key to any string.
+4. Send requests normally. The proxy handles routing, rotation, and auto-refresh behind the scenes.
 
 ---
 
-## Backend 400 "Missing required parameter: tool..."
+## Proxy and Token Refresh Management
 
-If you use OpenCode or another client that sends **tools / function calling** and get **400** with **Missing required parameter: 'tool...'**, the backend may expect a different format. This proxy now sends `tool_choice: none` when no tools are provided. If the error persists, try disabling tools/function calling in the client or use chat-only mode.
+### VPN and Per-Account Proxy
+
+If you encounter region restrictions or access denied errors, you have two options:
+1. Global VPN: Ensure your system-wide VPN is active and correctly routing traffic. OpenAI's login page must also go through the VPN.
+2. Per-Account Proxy: Bind a dedicated proxy URL (HTTP, HTTPS, or SOCKS) to the account directly. Both background requests and token refresh requests for that account will be securely routed through the configured proxy.
+
+### Token Auto Refresh
+
+Configurable under System Settings. The scheduler runs periodically in the background (minimum interval of 5 minutes).
+- Successfully refreshed accounts will be automatically unmarked from the unavailable list.
+- A "Refresh Now" button is available on the settings page to manually trigger a token refresh cycle for all accounts.
+
+### Batch Import
+
+Located on the Accounts page under the "Batch Import" button.
+- Accepts raw text input or file uploads (.txt) containing one Refresh Token per line.
+- The server will sequentially exchange each Refresh Token for an access token, extract account details, and save them automatically.
 
 ---
 
-## Request returns "fetch failed" / proxy_error
+## Troubleshooting
 
-If `POST /v1/chat/completions` returns `{"error":{"message":"fetch failed",...}}`, the service **cannot reach the Codex backend** (chatgpt.com)—the request failed before getting a response. Check:
+### Region not supported or access_denied when logging in
 
-1. **At least one account added**: On the config page, Accounts, add one Codex account (OAuth or paste auth.json).
-2. **Can this machine reach chatgpt.com**: In a browser or terminal run `curl -I https://chatgpt.com`. If it times out or is blocked, enable **VPN/proxy** on the machine running the service (same as for "Login with Codex").
-3. **Desktop app**: If using the desktop app, ensure that same PC can reach chatgpt.com (or enable VPN on it).
+- Ensure the login page uses the VPN: When clicking "Login with Codex", you are redirected to the OpenAI login page, which must also go through your VPN.
+- Try another VPN node: Some servers may leak DNS/IP or be flagged. Try using reliable US or EU nodes.
+- Use pasting auth.json: If login succeeds on another machine, retrieve its auth.json file (Windows: %USERPROFILE%\.codex\auth.json), copy the content, and paste it under Accounts -> Add account -> Paste JSON.
+
+### Backend 400 "Missing required parameter: tool..."
+
+If client tools or function-calling cause a 400 error, disable tools/function-calling in the client or switch to chat-only mode. The proxy automatically injects tool_choice: none when no tools are present, but some clients send custom tools formats that might trigger backend rejections.
+
+### Request returns "fetch failed" / proxy_error
+
+- Verify accounts: Ensure at least one account is active and verified.
+- Verify connectivity: Check if the server machine can reach chatgpt.com via `curl -I https://chatgpt.com`. If it times out, bind a proxy to your accounts or enable a global VPN.
 
 ---
 
-## Getting 403 when using a shared / hosted link
+## Image Generation
 
-If you open the service via a link provided by someone else (e.g. `https://example.com`) and get **403** or "Token exchange failed" at the last step of "Login with Codex", the issue is with the server’s OAuth callback configuration. Contact **whoever provides that link** to fix the domain and callback settings; you don’t need to change anything on your side.
+Supported via POST /v1/images/generations (OpenAI-compatible) powered by picture_v2 system hints.
+- Supported models: gpt-image-2 (default), gpt-image-1.5, gpt-image-1, gpt-image-1-mini.
+- Output: Returns a local proxy URL with a 30-minute browser cache.
 
----
-
-## Features
-
-- **Multi-account round-robin** — Requests use your added accounts in turn; if one fails, the next is used automatically.
-- **Config page** — Dashboard, Models (quota), Accounts (OAuth or paste JSON), Logs, Settings (language, base URL). Data refreshes every 5 seconds.
-- **Responsive UI** — Works on desktop and mobile; sidebar collapses to a menu on small screens.
-- **Bilingual** — Interface and logs in English and 简体中文.
-
-Multi-turn conversation is supported; send `messages` in the usual OpenAI format and the proxy will handle the rest.
-
-### Image generation
-
-Image generation is supported via `POST /v1/images/generations` (OpenAI-compatible), powered by the `f/conversation` protocol with `picture_v2` system hints. Supported models: `gpt-image-2` (default), `gpt-image-1.5`, `gpt-image-1`, `gpt-image-1-mini`. Images are returned as **proxy URLs** (browser-viewable) with a 30-minute cache.
-
+Request Example:
 ```bash
 curl -X POST http://localhost:1455/v1/images/generations \
   -H "Content-Type: application/json" \
   -d '{"model":"gpt-image-2","prompt":"a cat","n":1,"size":"1024x1024"}'
 ```
 
-Parameters: `model`, `prompt`, `n` (1–10), `size`, `quality` (low/medium/high/auto), `output_format` (png/jpeg/webp), `background`, `moderation`.
-
-Response (OpenAI-compatible, returns proxy URL):
-```json
-{"created": 1715808000, "data": [{"url": "http://localhost:1455/p/img/abc123..."}]}
-```
-Open the URL directly in a browser to view the generated image.
-
----
-
-## Using [free.violetteam.cloud](https://free.violetteam.cloud/) for verification
-
-If you use [free.violetteam.cloud](https://free.violetteam.cloud/) to receive verification emails (e.g. when registering a ChatGPT/Codex account), delivery can be a bit slow—please wait. If you still don’t receive the code after a long time, click **Resend verification code**.
+Parameters: model, prompt, n (1-10), size, quality, output_format, background, moderation.
 
 ---
 
 ## License
 
-MIT. Issues and suggestions: [GitHub Issues](https://github.com/violettoolssite/codexProapi/issues).
+MIT. For issues and suggestions, visit GitHub Issues: https://github.com/violettoolssite/codexProapi/issues.
