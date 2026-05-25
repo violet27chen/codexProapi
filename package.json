@@ -17,6 +17,7 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
+    "explore-signup": "node scripts/explore-signup.js",
     "electron": "node scripts/run-electron.cjs",
     "build:app-resources": "node scripts/build-app-resources.cjs",
     "dist": "npm run build:app-resources && electron-builder",
@@ -32,6 +33,10 @@
     "express": "^4.21.0",
     "https-proxy-agent": "^9.0.0",
     "socks-proxy-agent": "^10.0.0"
+  },
+  "optionalDependencies": {
+    "cloakbrowser": "^0.3.28",
+    "playwright-core": "^1.50.0"
   },
   "devDependencies": {
     "electron": "^28.0.0",

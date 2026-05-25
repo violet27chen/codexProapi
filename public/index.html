@@ -1,692 +1,456 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-   <meta charset="UTF-8">
-   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23533afd'/><text x='50' y='68' font-family='Arial' font-size='60' font-weight='bold' fill='white' text-anchor='middle'>C</text></svg>">
-   <title>CodexPro API - Free AI API Platform</title>
-   <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@300;400;500;600&family=Source+Code+Pro:wght@400;500;700&display=swap" rel="stylesheet">
-   <style>
-       :root {
-           --purple: #533afd;
-           --purple-hover: #4434d4;
-           --navy: #0a1628;
-           --slate: #4a5568;
-           --border: #e2e8f0;
-           --white: #ffffff;
-           --bg: #f7fafc;
-           --success: #10b981;
-           --success-text: #047857;
-           --dark-section: #0f172a;
-       }
-       * { margin: 0; padding: 0; box-sizing: border-box; }
-       body {
-           font-family: 'Source Sans 3', system-ui, -apple-system, sans-serif;
-           color: var(--navy);
-           background: var(--white);
-       }
-       nav {
-           position: sticky; top: 0; z-index: 100;
-           background: rgba(255,255,255,0.95);
-           backdrop-filter: blur(12px);
-           border-bottom: 1px solid var(--border);
-           padding: 16px 0;
-       }
-       .nav-inner {
-           max-width: 1080px; margin: 0 auto; padding: 0 24px;
-           display: flex; align-items: center; justify-content: space-between;
-       }
-       .logo { font-size: 22px; font-weight: 600; color: var(--navy); letter-spacing: -0.5px; }
-       .logo span { color: var(--purple); }
-       .nav-links { display: flex; gap: 32px; align-items: center; }
-       .nav-links a { font-size: 15px; color: var(--slate); text-decoration: none; font-weight: 500; }
-       .nav-links a:hover { color: var(--purple); }
-       .btn-primary {
-           background: transparent; color: #4338ca; border: 2px solid #4338ca;
-           padding: 10px 24px; border-radius: 6px; border: none; box-shadow: 0 2px 8px rgba(67,56,202,0.4);
-           font-size: 15px; font-weight: 600; cursor: pointer;
-           text-decoration: none; display: inline-block;
-           transition: background 0.2s;
-       }
-       .btn-primary:hover { background: var(--purple-hover); }
-       .btn-ghost {
-           background: transparent; color: var(--purple);
-           padding: 10px 24px; border-radius: 6px;
-           border: 2px solid var(--purple);
-           font-size: 15px; font-weight: 600; cursor: pointer;
-           text-decoration: none; display: inline-block;
-           transition: all 0.2s;
-       }
-        .btn-ghost:hover { background: rgba(83,58,253,0.08); }
-        .btn-accent {
-            background: var(--white); color: var(--purple);
-            padding: 10px 24px; border-radius: 6px;
-            border: 2px solid var(--border);
-            font-size: 15px; font-weight: 600; cursor: pointer;
-            text-decoration: none; display: inline-block;
-            transition: all 0.2s;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-        }
-        .btn-accent:hover { border-color: var(--purple); color: var(--purple); box-shadow: 0 4px 12px rgba(83,58,253,0.15); }
-       .hero {
-           max-width: 1080px; margin: 0 auto; padding: 80px 24px 60px;
-           text-align: center;
-       }
-       .badge {
-           display: inline-block; background: rgba(16,185,129,0.12);
-           color: var(--success-text); padding: 6px 16px;
-           border-radius: 20px; font-size: 14px; font-weight: 600;
-           margin-bottom: 24px;
-           border: 1px solid rgba(16,185,129,0.3);
-       }
-       h1 {
-           font-size: 52px; font-weight: 300; line-height: 1.1;
-           letter-spacing: -1.5px; color: var(--navy);
-           margin-bottom: 20px;
-       }
-       .subtitle {
-           font-size: 18px; font-weight: 400; line-height: 1.6;
-           color: var(--slate); max-width: 620px; margin: 0 auto 36px;
-       }
-       .cta-group { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
-       .models-bar {
-           display: flex; gap: 10px; justify-content: center;
-           flex-wrap: wrap; margin-top: 40px;
-       }
-       .model-pill {
-           background: var(--bg); border: 1px solid var(--border);
-           padding: 8px 16px; border-radius: 6px;
-           font-size: 14px; color: var(--slate); font-weight: 500;
-           font-family: 'Source Code Pro', monospace;
-       }
-       .features {
-           max-width: 1080px; margin: 0 auto;
-           padding: 60px 24px;
-           display: grid; grid-template-columns: repeat(3, 1fr);
-           gap: 24px;
-       }
-       .feature-card {
-           background: var(--white);
-           border: 1px solid var(--border);
-           border-radius: 8px;
-           padding: 32px 28px;
-           box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03);
-           transition: box-shadow 0.3s, transform 0.3s;
-       }
-       .feature-card:hover {
-           box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -5px rgba(0,0,0,0.04);
-           transform: translateY(-2px);
-       }
-       .feature-icon {
-           width: 48px; height: 48px; border-radius: 10px;
-           background: rgba(83,58,253,0.1);
-           display: flex; align-items: center; justify-content: center;
-           margin-bottom: 20px;
-       }
-       .feature-icon svg { width: 24px; height: 24px; color: var(--purple); }
-       .feature-card h3 {
-           font-size: 20px; font-weight: 600; color: var(--navy);
-           margin-bottom: 10px; letter-spacing: -0.3px;
-       }
-       .feature-card p { font-size: 16px; font-weight: 400; color: var(--slate); line-height: 1.6; }
-       .code-section {
-           max-width: 1080px; margin: 0 auto; padding: 0 24px 60px;
-       }
-       .code-card {
-           background: var(--navy);
-           border-radius: 12px; padding: 48px;
-           box-shadow: 0 20px 40px -10px rgba(10,22,40,0.4);
-       }
-       .code-card h2 {
-           font-size: 32px; font-weight: 300; color: var(--white);
-           letter-spacing: -0.6px; margin-bottom: 12px;
-       }
-       .code-card .sub { font-size: 16px; color: rgba(255,255,255,0.7); margin-bottom: 28px; }
-       .code-block {
-           background: rgba(0,0,0,0.35); border-radius: 8px;
-           padding: 24px; overflow-x: auto;
-           border: 1px solid rgba(255,255,255,0.1);
-       }
-        .code-block code {
-            font-family: 'Source Code Pro', monospace;
-            font-size: 14px; line-height: 1.8;
-            color: #e2e8f0;
-            white-space: pre;
-            display: block;
-        }
-       .code-block .kw { color: #a78bfa; }
-       .code-block .str { color: #86efac; }
-       .code-block .punc { color: rgba(255,255,255,0.5); }
-       .code-block .cmt { color: #64748b; }
-       .code-block .fn { color: #67e8f9; }
-       .code-block .num { color: #f9a8d4; }
-        .code-block.hidden { display: none; }
-        .code-block { position: relative; }
-        .copy-btn {
-            position: absolute; top: 12px; right: 12px;
-            background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
-            color: #fff; padding: 6px 12px; border-radius: 6px;
-            font-size: 12px; font-weight: 500; cursor: pointer;
-            transition: all 0.2s; z-index: 10;
-            font-family: 'Source Sans 3', system-ui, sans-serif;
-        }
-        .copy-btn:hover { background: rgba(255,255,255,0.2); }
-        .copy-btn.copied { background: rgba(16,185,129,0.3); border-color: rgba(16,185,129,0.5); color: #86efac; }
-       .code-tabs {
-           display: flex; gap: 4px; margin-bottom: 12px;
-           border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0;
-       }
-       .code-tab {
-           background: transparent; border: none; color: rgba(255,255,255,0.5);
-           padding: 10px 20px; font-size: 14px; font-weight: 500; cursor: pointer;
-           border-bottom: 2px solid transparent; transition: all 0.2s;
-           font-family: 'Source Sans 3', system-ui, sans-serif;
-       }
-       .code-tab:hover { color: rgba(255,255,255,0.8); }
-       .code-tab.active { color: #a78bfa; border-bottom-color: #a78bfa; }
-       .code-mode-toggle {
-           display: flex; gap: 4px; margin-bottom: 16px;
-       }
-       .mode-btn {
-           background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
-           color: rgba(255,255,255,0.5); padding: 6px 16px; border-radius: 6px;
-           font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s;
-           font-family: 'Source Sans 3', system-ui, sans-serif;
-       }
-       .mode-btn:hover { color: rgba(255,255,255,0.8); border-color: rgba(255,255,255,0.2); }
-       .mode-btn.active { background: rgba(167,139,250,0.15); border-color: rgba(167,139,250,0.4); color: #a78bfa; }
-       .code-controls {
-           display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 16px;
-       }
-       .model-select {
-           background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
-           color: rgba(255,255,255,0.8); padding: 6px 14px; border-radius: 6px;
-           font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s;
-           font-family: 'Source Code Pro', monospace;
-       }
-       .model-select:hover { border-color: rgba(255,255,255,0.2); }
-       .model-select option { background: #1e293b; color: #e2e8f0; }
-       .dark-section {
-           background: var(--dark-section);
-           padding: 80px 24px;
-       }
-       .dark-inner {
-           max-width: 1080px; margin: 0 auto;
-           display: grid; grid-template-columns: 1fr 1fr;
-           gap: 60px; align-items: center;
-       }
-       .dark-section h2 {
-           font-size: 40px; font-weight: 300; color: var(--white);
-           letter-spacing: -1px; margin-bottom: 20px;
-       }
-       .dark-section p {
-           font-size: 17px; font-weight: 400; color: rgba(255,255,255,0.75);
-           line-height: 1.7;
-       }
-       .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-       .stat-card {
-           background: rgba(255,255,255,0.06);
-           border: 1px solid rgba(255,255,255,0.1);
-           border-radius: 10px; padding: 28px;
-       }
-       .stat-card .num {
-           font-size: 36px; font-weight: 300; color: var(--white);
-           letter-spacing: -0.5px;
-       }
-       .stat-card .label {
-           font-size: 14px; color: rgba(255,255,255,0.6); margin-top: 6px;
-       }
-       footer {
-           max-width: 1080px; margin: 0 auto;
-           padding: 40px 24px;
-           display: flex; justify-content: space-between;
-           align-items: center; border-top: 1px solid var(--border);
-       }
-       footer p { font-size: 14px; color: var(--slate); }
-       footer a { color: var(--purple); text-decoration: none; font-weight: 500; }
-       @media (max-width: 768px) {
-           h1 { font-size: 36px; letter-spacing: -0.8px; }
-           .features { grid-template-columns: 1fr; }
-           .dark-inner { grid-template-columns: 1fr; }
-           .nav-links { display: none; }
-           .code-card { padding: 32px 24px; }
-           .code-tabs { overflow-x: auto; flex-wrap: nowrap; }
-           .code-tab { padding: 8px 14px; font-size: 13px; white-space: nowrap; }
-       }
-   </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CodexPro API</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<script>
+window.addEventListener('error', e => console.error('[JS ERROR]', e.message, e.filename + ':' + e.lineno));
+window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.reason));
+</script>
+<script src="/app.js"></script>
+<script defer src="/vendor/alpine.min.js"></script>
+<link rel="stylesheet" href="/style.css">
 </head>
 <body>
-   <nav>
-       <div class="nav-inner">
-           <div class="logo">Codex<span>Pro</span></div>
-           <div class="nav-links">
-               <a href="#features">Features</a>
-               <a href="#docs">Docs</a>
-               <span style="font-size:15px;font-weight:600;color:#533afd">Free Platform</span>
-           </div>
-       </div>
-   </nav>
 
-   <section class="hero">
-       <div style="background:linear-gradient(135deg,rgba(83,58,230,0.1),rgba(83,58,230,0.05));border:1px solid rgba(83,58,230,0.2);border-radius:12px;padding:20px 32px;margin-bottom:32px;max-width:680px;margin-left:auto;margin-right:auto">
-           <p style="font-size:18px;font-weight:600;color:#0a1628;margin-bottom:6px">Have an idle ChatGPT account?</p>
-           <p style="font-size:15px;color:#4a5568;line-height:1.5">Contribute it to keep this service free for everyone. We truly appreciate your support.</p>
-           <a href="#" onclick="event.preventDefault();document.getElementById('add-account-modal').style.display='flex'" style="display:inline-block;margin-top:12px;font-size:14px;font-weight:600;color:#533afd;text-decoration:none">Contribute now →</a>
-       </div>
-       <div style="background:linear-gradient(135deg,rgba(16,185,129,0.1),rgba(16,185,129,0.05));border:1px solid rgba(16,185,129,0.2);border-radius:12px;padding:20px 32px;margin-bottom:32px;max-width:680px;margin-left:auto;margin-right:auto">
-           <p style="font-size:18px;font-weight:600;color:#0a1628;margin-bottom:6px">Have spare proxy IPs?</p>
-           <p style="font-size:15px;color:#4a5568;line-height:1.5">Contribute proxy IPs to distribute traffic and keep accounts safe from bans.</p>
-           <a href="#" onclick="event.preventDefault();document.getElementById('add-proxy-modal').style.display='flex'" style="display:inline-block;margin-top:12px;font-size:14px;font-weight:600;color:#047857;text-decoration:none">Contribute proxy →</a>
-       </div>
-       <div class="badge">Free and open to everyone</div>
-       <h1>AI API, no strings attached</h1>
-       <p style="font-size:14px;color:rgba(255,255,255,0.5);margin-bottom:24px">A GPT API powered by people who contribute for the love of it</p>
-        <div class="cta-group">
-            <a href="#docs" class="btn-primary">Get started</a>
+<div x-data="app()" x-init="init()">
+
+  <!-- Toast -->
+  <div x-show="toast" x-cloak class="toast" :class="'toast-' + (toast?.type||'info')">
+    <span x-text="toast?.msg"></span>
+  </div>
+
+  <div class="app-shell">
+
+    <!-- ── SIDEBAR ── -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-name">CODEX PRO <span>API</span></div>
+        <div class="brand-meta" x-text="'v' + version"></div>
+      </div>
+
+      <nav class="nav">
+        <div class="nav-item" :class="page==='dashboard'&&'active'" @click="page='dashboard'">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
+          仪表盘
         </div>
-        <div class="models-bar"><span class="model-pill">gpt-5.5</span><span class="model-pill">gpt-5.4</span><span class="model-pill">gpt-5.3-codex</span><span class="model-pill">gpt-5.2</span><span class="model-pill">gpt-image-2</span></div>
-        <div style="display:flex;gap:24px;justify-content:center;margin-top:20px;flex-wrap:wrap">
-            <span style="font-size:13px;color:#4a5568">✓ Free access to latest AI models</span>
-            <span style="font-size:13px;color:#4a5568">✓ OpenAI-compatible API</span>
-            <span style="font-size:13px;color:#4a5568">✓ No signup required</span>
-            <span style="font-size:13px;color:#4a5568">✓ No limits</span>
-            <span style="font-size:13px;color:#4a5568">✓ No credit card</span>
+        <div class="nav-item" :class="page==='accounts'&&'active'" @click="page='accounts'; loadAccounts()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+          账号管理
+          <span x-show="accounts.length>0" class="badge badge-info ml-auto" x-text="accounts.length"></span>
         </div>
-   </section>
-
-   <section class="features" id="features">
-       <div class="feature-card">
-           <div class="feature-icon">
-               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-           </div>
-           <h3>Chat completions</h3>
-           <p>Full OpenAI-compatible chat API. Drop-in replacement for any OpenAI SDK or client library.</p>
-       </div>
-       <div class="feature-card">
-           <div class="feature-icon">
-               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
-           </div>
-           <h3>Image generation</h3>
-           <p>Generate images with gpt-image-2. Text-to-image via the standard images endpoint.</p>
-       </div>
-       <div class="feature-card">
-           <div class="feature-icon">
-               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-           </div>
-           <h3>Multi-account pool</h3>
-           <p>Multiple accounts for load balancing. Automatic failover when one account hits limits.</p>
-       </div>
-       <div class="feature-card">
-           <div class="feature-icon">
-               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/><path d="M21 3v6h-6"/></svg>
-           </div>
-           <h3>Auto token refresh</h3>
-           <p>Tokens refresh automatically. 24/7 uptime with zero maintenance required.</p>
-       </div>
-       <div class="feature-card">
-           <div class="feature-icon">
-               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-           </div>
-           <h3>Proxy rotation</h3>
-           <p>Built-in proxy pool support. Distribute requests across IPs to avoid rate limits.</p>
-       </div>
-       <div class="feature-card">
-           <div class="feature-icon">
-               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-           </div>
-           <h3>Community powered</h3>
-           <p>Built and maintained by contributors who believe in free AI access for everyone.</p>
-       </div>
-   </section>
-
-   <section class="code-section" id="docs">
-       <div class="code-card">
-           <h2>Quick start</h2>
-           <p class="sub">Works with any OpenAI-compatible client. Just point your base URL here.</p>
-           <!-- Language tabs -->
-           <div class="code-tabs">
-               <button class="code-tab active" onclick="showCode('python')">Python</button>
-               <button class="code-tab" onclick="showCode('js')">JavaScript</button>
-               <button class="code-tab" onclick="showCode('go')">Go</button>
-               <button class="code-tab" onclick="showCode('curl')">cURL</button>
-           </div>
-           <!-- Controls -->
-           <div class="code-controls">
-               <select class="model-select" id="model-select" onchange="setModel(this.value)">
-                   <option value="gpt-5.5">gpt-5.5</option>
-                   <option value="gpt-5.4">gpt-5.4</option>
-                   <option value="gpt-5.3-codex">gpt-5.3-codex</option>
-                   <option value="gpt-5.2">gpt-5.2</option>
-                   <option value="gpt-image-2">gpt-image-2</option>
-               </select>
-               <button class="mode-btn active" onclick="setMode('sync')">Non-streaming</button>
-               <button class="mode-btn" onclick="setMode('stream')">Streaming</button>
-           </div>
-
-           <!-- Python -->
-           <div class="code-block" id="code-python-sync">
-               <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-               <code><span class="cmt">from openai import OpenAI</span>
-
-<span class="kw">client</span> = <span class="fn">OpenAI</span>(base_url=<span class="str">"https://27c.site/v1"</span>, api_key=<span class="str">"any"</span>)
-
-<span class="kw">response</span> = client.chat.completions.<span class="fn">create</span>(
-   model=<span class="str" data-model>"gpt-5.5"</span>,
-   messages=[{<span class="str">"role"</span>: <span class="str">"user"</span>, <span class="str">"content"</span>: <span class="str">"Hello!"</span>}]
-)
-
-<span class="fn">print</span>(response.choices[<span class="num">0</span>].message.content)</code></div>
-           <div class="code-block hidden" id="code-python-stream">
-               <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-               <code><span class="cmt">from openai import OpenAI</span>
-
-<span class="kw">client</span> = <span class="fn">OpenAI</span>(base_url=<span class="str">"https://27c.site/v1"</span>, api_key=<span class="str">"any"</span>)
-
-<span class="kw">stream</span> = client.chat.completions.<span class="fn">create</span>(
-   model=<span class="str" data-model>"gpt-5.5"</span>,
-   messages=[{<span class="str">"role"</span>: <span class="str">"user"</span>, <span class="str">"content"</span>: <span class="str">"Hello!"</span>}],
-   stream=<span class="num">True</span>
-)
-
-<span class="kw">for</span> chunk <span class="kw">in</span> stream:
-   <span class="kw">if</span> chunk.choices[<span class="num">0</span>].delta.content:
-       <span class="fn">print</span>(chunk.choices[<span class="num">0</span>].delta.content, end=<span class="str">""</span>)</code></div>
-
-           <!-- JavaScript -->
-           <div class="code-block hidden" id="code-js-sync">
-               <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-               <code><span class="kw">import</span> OpenAI <span class="kw">from</span> <span class="str">"openai"</span>;
-
-<span class="kw">const</span> client = <span class="kw">new</span> <span class="fn">OpenAI</span>({
- baseURL: <span class="str">"https://27c.site/v1"</span>,
- apiKey: <span class="str">"any"</span>,
-});
-
-<span class="kw">const</span> res = <span class="kw">await</span> client.chat.completions.<span class="fn">create</span>({
- model: <span class="str" data-model>"gpt-5.5"</span>,
- messages: [{ role: <span class="str">"user"</span>, content: <span class="str">"Hello!"</span> }],
-});
-
-console.<span class="fn">log</span>(res.choices[<span class="num">0</span>].message.content);</code></div>
-           <div class="code-block hidden" id="code-js-stream">
-               <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-               <code><span class="kw">import</span> OpenAI <span class="kw">from</span> <span class="str">"openai"</span>;
-
-<span class="kw">const</span> client = <span class="kw">new</span> <span class="fn">OpenAI</span>({
- baseURL: <span class="str">"https://27c.site/v1"</span>,
- apiKey: <span class="str">"any"</span>,
-});
-
-<span class="kw">const</span> stream = <span class="kw">await</span> client.chat.completions.<span class="fn">create</span>({
- model: <span class="str" data-model>"gpt-5.5"</span>,
- messages: [{ role: <span class="str">"user"</span>, content: <span class="str">"Hello!"</span> }],
- stream: <span class="num">true</span>,
-});
-
-<span class="kw">for await</span> (<span class="kw">const</span> chunk <span class="kw">of</span> stream) {
- <span class="kw">const</span> text = chunk.choices[<span class="num">0</span>]?.delta?.content;
- <span class="kw">if</span> (text) process.stdout.<span class="fn">write</span>(text);
-}</code></div>
-
-           <!-- Go -->
-           <div class="code-block hidden" id="code-go-sync">
-               <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-               <code><span class="kw">package</span> main
-
-<span class="kw">import</span> (
-   <span class="str">"context"</span>
-   <span class="str">"fmt"</span>
-   openai <span class="str">"github.com/sashabaranov/go-openai"</span>
-)
-
-<span class="kw">func</span> <span class="fn">main</span>() {
-   client := openai.<span class="fn">NewClient</span>(<span class="str">"any"</span>, <span class="str">"https://27c.site/v1"</span>)
-
-   resp, err := client.Chat.Completions.<span class="fn">Create</span>(
-       context.<span class="fn">Background</span>(),
-       openai.ChatCompletionRequest{
-           Model: <span class="str" data-model>"gpt-5.5"</span>,
-           Messages: []openai.ChatCompletionMessage{
-               {Role: openai.ChatMessageRoleUser, Content: <span class="str">"Hello!"</span>},
-           },
-       },
-   )
-   <span class="kw">if</span> err != <span class="num">nil</span> { <span class="kw">panic</span>(err) }
-   fmt.<span class="fn">Println</span>(resp.Choices[<span class="num">0</span>].Message.Content)
-}</code></div>
-           <div class="code-block hidden" id="code-go-stream">
-               <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-               <code><span class="kw">package</span> main
-
-<span class="kw">import</span> (
-   <span class="str">"fmt"</span>
-   <span class="str">"os"</span>
-   openai <span class="str">"github.com/sashabaranov/go-openai"</span>
-)
-
-<span class="kw">func</span> <span class="fn">main</span>() {
-   client := openai.<span class="fn">NewClient</span>(<span class="str">"any"</span>, <span class="str">"https://27c.site/v1"</span>)
-
-   req := openai.ChatCompletionRequest{
-       Model: <span class="str" data-model>"gpt-5.5"</span>,
-       Messages: []openai.ChatCompletionMessage{
-           {Role: openai.ChatMessageRoleUser, Content: <span class="str">"Hello!"</span>},
-       },
-       Stream: <span class="num">true</span>,
-   }
-
-   stream, err := client.Chat.Completions.<span class="fn">Create</span>(ctx, req)
-   <span class="kw">if</span> err != <span class="num">nil</span> { <span class="kw">panic</span>(err) }
-   <span class="kw">defer</span> stream.<span class="fn">Close</span>()
-
-   <span class="kw">for</span> {
-       resp, err := stream.<span class="fn">Recv</span>()
-       <span class="kw">if</span> err != <span class="num">nil</span> { <span class="kw">break</span> }
-       fmt.<span class="fn">Print</span>(resp.Choices[<span class="num">0</span>].Delta.Content)
-   }
-}</code></div>
-
-            <!-- cURL -->
-            <div class="code-block hidden" id="code-curl-sync">
-               <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-                <code><span class="kw">curl</span> https://27c.site/v1/chat/completions <span class="punc">\</span>
-  -H <span class="str">"Content-Type: application/json"</span> <span class="punc">\</span>
-  -d <span class="str">'{
-    "model": </span><span class="str" data-model>"gpt-5.5"</span><span class="str">,
-    "messages": [{"role": "user", "content": "Hello!"}]
-  }'</span></code></div>
-            <div class="code-block hidden" id="code-curl-stream">
-               <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-                <code><span class="kw">curl</span> https://27c.site/v1/chat/completions <span class="punc">\</span>
-  -H <span class="str">"Content-Type: application/json"</span> <span class="punc">\</span>
-  -d <span class="str">'{
-    "model": </span><span class="str" data-model>"gpt-5.5"</span><span class="str">,
-    "messages": [{"role": "user", "content": "Hello!"}],
-    "stream": true
-  }'</span></code></div>
-
-       </div>
-   </section>
-
-   <section class="dark-section">
-       <div class="dark-inner">
-           <div>
-               <h2>Built for developers</h2>
-               <p>Use your favorite tools. OpenAI SDK, LangChain, LlamaIndex, or raw HTTP requests. Everything just works out of the box.</p>
-           </div>
-           <div class="stat-grid">
-               <div class="stat-card">
-                   <div class="num" id="stat-accounts">7</div>
-                   <div class="label">Active accounts</div>
-               </div>
-               <div class="stat-card">
-                   <div class="num" id="stat-proxies">2</div>
-                   <div class="label">Proxy IPs</div>
-               </div>
-               <div class="stat-card">
-                   <div class="num" id="stat-models">5</div>
-                   <div class="label">Models available</div>
-               </div>
-               <div class="stat-card">
-                   <div class="num">24/7</div>
-                   <div class="label">Uptime</div>
-               </div>
-               <div class="stat-card">
-                   <div class="num">$0</div>
-                   <div class="label">Cost to you</div>
-               </div>
-           </div>
-       </div>
-   </section>
-
-   <footer>
-       <p>CodexPro API</p>
-       <p><a href="https://27c.site">27c.site</a></p>
-   </footer>
-    <div id="add-account-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:999;align-items:center;justify-content:center" onclick="if(event.target===this)this.style.display='none'">
-        <div style="background:#fff;border-radius:12px;padding:40px;max-width:560px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3);position:relative">
-            <button onclick="document.getElementById('add-account-modal').style.display='none'" style="position:absolute;top:16px;right:16px;background:none;border:none;font-size:24px;cursor:pointer;color:#94a3b8">&times;</button>
-            <h3 style="font-size:24px;font-weight:600;color:#0a1628;margin-bottom:8px">Add your account</h3>
-            <p style="font-size:14px;color:#4a5568;line-height:1.6;margin-bottom:20px">Install Codex CLI on your local machine, then authorize:</p>
-
-            <div style="margin-bottom:12px">
-                <p style="font-size:13px;color:#94a3b8;margin-bottom:6px;font-weight:500">Step 1 — Install Codex CLI</p>
-                <div style="background:#0f172a;border-radius:8px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between">
-                    <code style="font-family:monospace;font-size:13px;color:#e2e8f0;white-space:nowrap"><span style="color:#a78bfa">npm</span> <span style="color:#e2e8f0">install -g</span> <span style="color:#86efac">@openai/codex</span></code>
-                    <button onclick="navigator.clipboard.writeText('npm install -g @openai/codex');this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:#fff;padding:4px 10px;border-radius:4px;font-size:11px;cursor:pointer;white-space:nowrap;margin-left:12px">Copy</button>
-                </div>
-            </div>
-
-            <div style="margin-bottom:12px">
-                <p style="font-size:13px;color:#94a3b8;margin-bottom:6px;font-weight:500">Step 2 — Login</p>
-                <div style="background:#0f172a;border-radius:8px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between">
-                    <code style="font-family:monospace;font-size:13px;color:#e2e8f0;white-space:nowrap"><span style="color:#a78bfa">codex</span> <span style="color:#86efac">login</span></code>
-                    <button onclick="navigator.clipboard.writeText('codex login');this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:#fff;padding:4px 10px;border-radius:4px;font-size:11px;cursor:pointer;white-space:nowrap;margin-left:12px">Copy</button>
-                </div>
-            </div>
-
-            <div style="margin-bottom:20px">
-                <p style="font-size:13px;color:#94a3b8;margin-bottom:6px;font-weight:500">Step 3 — Push token to server</p>
-                <div style="background:#0f172a;border-radius:8px;padding:14px 16px">
-                    <p style="font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:8px">Linux / macOS:</p>
-                    <div style="display:flex;align-items:center;justify-content:space-between">
-                        <code style="font-family:monospace;font-size:13px;color:#e2e8f0;white-space:nowrap"><span style="color:#a78bfa">curl</span> <span style="color:#e2e8f0">-sL https://27c.site/push-token.js | node</span></code>
-                        <button onclick="navigator.clipboard.writeText('curl -sL https://27c.site/push-token.js | node');this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:#fff;padding:4px 10px;border-radius:4px;font-size:11px;cursor:pointer;white-space:nowrap;margin-left:12px">Copy</button>
-                    </div>
-                    <p style="font-size:12px;color:rgba(255,255,255,0.5);margin:12px 0 8px">Windows (PowerShell):</p>
-                    <div style="display:flex;align-items:center;justify-content:space-between">
-                        <code style="font-family:monospace;font-size:13px;color:#e2e8f0;white-space:nowrap"><span style="color:#a78bfa">irm</span> <span style="color:#e2e8f0">https://27c.site/push-token.js | node</span></code>
-                        <button onclick="navigator.clipboard.writeText('irm https://27c.site/push-token.js | node');this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:#fff;padding:4px 10px;border-radius:4px;font-size:11px;cursor:pointer;white-space:nowrap;margin-left:12px">Copy</button>
-                    </div>
-                </div>
-            </div>
-
-            <p style="font-size:14px;color:#4a5568;line-height:1.6;margin-bottom:16px">Your token will be pushed to 27c.site automatically.</p>
+        <div class="nav-item" :class="page==='models'&&'active'" @click="page='models'; loadModels()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+          模型可用性
+          <span x-show="models.length>0" class="badge badge-ok ml-auto" x-text="availableModelsCount+'/'+models.length"></span>
         </div>
+        <div class="nav-item" :class="page==='usage'&&'active'" @click="page='usage'; loadUsage()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+          用量统计
+        </div>
+        <div class="nav-item" :class="page==='logs'&&'active'" @click="page='logs'; loadLogs()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+          请求日志
+        </div>
+        <div class="nav-item" :class="page==='settings'&&'active'" @click="page='settings'; loadSettings()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+          系统设置
+        </div>
+      </nav>
+
+      <div class="sidebar-footer">
+        <span class="dot" :class="health==='ok'?'dot-ok':health===null?'dot-gray':'dot-err'"></span>
+        <span x-text="health==='ok'?'运行中':health===null?'连接中':'异常'"></span>
+        <span class="ml-auto mono text-xs" x-text="now.slice(11,19)"></span>
+      </div>
+    </aside>
+
+    <!-- ── MAIN ── -->
+    <div class="main-area">
+
+      <!-- Page header -->
+      <div class="page-header">
+        <span class="page-title" x-text="{dashboard:'仪表盘',accounts:'账号管理',models:'模型可用性',usage:'用量统计',logs:'请求日志',settings:'系统设置'}[page]"></span>
+        <div class="header-actions">
+          <!-- accounts actions -->
+          <div class="flex gap-2" x-show="page==='accounts'">
+            <button type="button" class="btn" @click="checkAccountsHealth()" :class="{'btn-loading':loading.health}">
+              <svg x-show="loading.health" class="spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.22-8.56"/></svg>
+              健康检查
+            </button>
+            <button type="button" class="btn" @click="showBatchImport=true; batchImportText=''; batchImportResults=null">批量导入</button>
+            <button type="button" class="btn btn-primary" @click="showAdd=true; resetAddForm()">+ 添加账号</button>
+          </div>
+          <!-- models actions -->
+          <div x-show="page==='models'">
+            <button type="button" class="btn btn-primary" @click="doRefreshModels()" :class="{'btn-loading':loading.models}">
+              <svg x-show="loading.models" class="spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.22-8.56"/></svg>
+              刷新探测
+            </button>
+          </div>
+          <!-- logs actions -->
+          <div x-show="page==='logs'">
+            <button type="button" class="btn btn-danger" @click="clearLogs()">清空日志</button>
+          </div>
+          <!-- settings actions -->
+          <div x-show="page==='settings'">
+            <button type="button" class="btn btn-primary" @click="saveCfg()" :class="{'btn-loading':loading.settings}">保存设置</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ════ DASHBOARD ════ -->
+      <div class="content" x-show="page==='dashboard'">
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">账号总数</div>
+            <div class="stat-value" x-text="accounts.length"></div>
+            <div class="stat-sub">已配置</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">今日请求</div>
+            <div class="stat-value" x-text="todayReqs"></div>
+            <div class="stat-sub">次</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Token 用量</div>
+            <div class="stat-value" x-text="formatTok(totalTokens)"></div>
+            <div class="stat-sub">累计</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">可用模型</div>
+            <div class="stat-value" x-text="availableModelsCount"></div>
+            <div class="stat-sub" x-text="models.length ? '/ ' + models.length + ' 个' : '未探测'"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">接口端点</div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>方法</th><th>路径</th><th>说明</th></tr></thead>
+              <tbody>
+                <template x-for="(ep, idx) in endpoints" :key="idx">
+                  <tr>
+                    <td><span class="badge badge-info mono" x-text="ep.m"></span></td>
+                    <td class="mono" x-text="ep.path"></td>
+                    <td class="text-muted" x-text="ep.desc"></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">调用示例</div>
+          <pre class="code-block" x-text="curlExample"></pre>
+          <button type="button" class="btn btn-sm mt-2" @click="copyTxt(curlExample)">复制</button>
+        </div>
+
+        <div class="card">
+          <div class="card-title">最近日志</div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>时间</th><th>路径</th><th>状态</th><th>耗时</th></tr></thead>
+              <tbody>
+                <tr x-show="logs.length===0"><td colspan="4" class="empty">暂无日志</td></tr>
+                <template x-for="(l, idx) in logs.slice(0,8)" :key="idx">
+                  <tr>
+                    <td class="mono text-dim" x-text="fmtTime(l.time)"></td>
+                    <td class="mono" x-text="(l.method||'')+ ' ' +(l.path||'')"></td>
+                    <td>
+                      <span class="badge" :class="l.level==='SUCCESS'?'badge-ok':l.level==='WARN'?'badge-warn':'badge-err'" x-text="l.status||l.level"></span>
+                    </td>
+                    <td class="text-muted" x-text="l.ms!=null ? l.ms+'ms' : ''"></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ════ ACCOUNTS ════ -->
+      <div class="content" x-show="page==='accounts'" x-cloak>
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>账号</th>
+                  <th>类型</th>
+                  <th>代理</th>
+                  <th>Token 到期</th>
+                  <th>状态</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr x-show="accounts.length===0"><td colspan="7" class="empty">暂无账号，点击右上角添加</td></tr>
+                <template x-for="(acc, idx) in accounts" :key="idx">
+                  <tr>
+                    <td class="text-muted" x-text="acc.index+1"></td>
+                    <td>
+                      <div x-text="acc.name || ('账号 '+(acc.index+1))"></div>
+                      <div class="mono text-dim text-xs" x-text="acc.accountIdMask||''"></div>
+                    </td>
+                    <td class="mono text-xs text-muted" x-text="acc.source||'—'"></td>
+                    <td class="mono text-xs">
+                      <div class="flex items-center gap-2">
+                        <span x-text="acc.proxyDisplay || '—'" :class="acc.proxyDisplay ? 'text-muted' : 'text-dim'"></span>
+                        <button type="button" class="btn btn-sm" style="padding: 2px 6px; font-size: 11px;" @click="editProxy(acc.index, acc.proxy)">修改</button>
+                      </div>
+                    </td>
+                    <td class="mono text-xs" x-text="acc.tokenExp ? fmtTime(acc.tokenExp, true) : '—'"></td>
+                    <td>
+                      <span x-show="accHealth[acc.accountIdMask]" class="badge" :class="accHealth[acc.accountIdMask]&&(accHealth[acc.accountIdMask].healthy?'badge-ok':'badge-err')" x-text="accHealth[acc.accountIdMask]&&(accHealth[acc.accountIdMask].healthy?'正常':accHealth[acc.accountIdMask].reason||'异常')"></span>
+                      <span x-show="!accHealth[acc.accountIdMask]" class="text-dim text-xs">—</span>
+                    </td>
+                    <td>
+                      <button type="button" class="btn btn-sm btn-danger" @click="delAcc(acc.index)">删除</button>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ════ MODELS ════ -->
+      <div class="content" x-show="page==='models'" x-cloak>
+        <p class="text-muted text-sm" style="margin-bottom:12px" x-show="modelsLastProbed>0" x-text="'上次探测：' + fmtTime(new Date(modelsLastProbed).toISOString())"></p>
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>模型 ID</th><th>状态</th><th>延迟</th><th>原因</th></tr></thead>
+              <tbody>
+                <tr x-show="models.length===0"><td colspan="4" class="empty">点击“刷新探测”获取模型状态</td></tr>
+                <template x-for="(m, idx) in models" :key="idx">
+                  <tr>
+                    <td class="mono" x-text="m.id"></td>
+                    <td>
+                      <span class="badge"
+                        :class="m.available===true?'badge-ok':m.available===false?'badge-err':'badge-gray'"
+                        x-text="m.available===true?'可用':m.available===false?'不可用':'未知'"></span>
+                    </td>
+                    <td class="text-muted" x-text="m.latency!=null ? m.latency+'ms' : '—'"></td>
+                    <td class="text-muted text-xs" x-text="m.reason||'—'"></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ════ USAGE ════ -->
+      <div class="content" x-show="page==='usage'" x-cloak>
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>账号</th><th>已用 Token</th><th>剩余配额</th></tr></thead>
+              <tbody>
+                <tr x-show="usageData.length===0"><td colspan="3" class="empty">暂无数据</td></tr>
+                <template x-for="(u, idx) in usageData" :key="idx">
+                  <tr>
+                    <td>
+                      <div x-text="getAccName(u.index)"></div>
+                      <div class="mono text-dim text-xs" x-text="u.accountIdMask||''"></div>
+                    </td>
+                    <td class="mono" x-text="formatTok(u.used_tokens)"></td>
+                    <td class="text-muted" x-text="u.remaining_pct!=null ? u.remaining_pct+'%' : '—'"></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ════ LOGS ════ -->
+      <div class="content" x-show="page==='logs'" x-cloak>
+        <div class="tab-bar">
+          <div class="tab-item" :class="lf==='all'&&'active'" @click="lf='all'">全部</div>
+          <div class="tab-item" :class="lf==='SUCCESS'&&'active'" @click="lf='SUCCESS'">成功</div>
+          <div class="tab-item" :class="lf==='WARN'&&'active'" @click="lf='WARN'">警告</div>
+          <div class="tab-item" :class="lf==='ERR'&&'active'" @click="lf='ERR'">错误</div>
+        </div>
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>时间</th><th>方法</th><th>路径</th><th>状态</th><th>耗时</th></tr></thead>
+              <tbody>
+                <tr x-show="filtLogs.length===0"><td colspan="5" class="empty">暂无日志</td></tr>
+                <template x-for="(l, idx) in filtLogs" :key="idx">
+                  <tr>
+                    <td class="mono text-dim text-xs" x-text="fmtTime(l.time, true)"></td>
+                    <td class="mono text-xs" x-text="l.method||''"></td>
+                    <td class="mono" x-text="l.path||''"></td>
+                    <td>
+                      <span class="badge" :class="l.level==='SUCCESS'?'badge-ok':l.level==='WARN'?'badge-warn':'badge-err'" x-text="l.status||l.level"></span>
+                    </td>
+                    <td class="text-muted" x-text="l.ms!=null?l.ms+'ms':''"></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ════ SETTINGS ════ -->
+      <div class="content" x-show="page==='settings'" x-cloak>
+        <div class="card" style="max-width:560px">
+          <div class="card-title">API 鉴权</div>
+          <div class="form-row">
+            <label class="form-label">API Key（留空则不鉴权）</label>
+            <div class="input-row">
+              <input :type="showKey?'text':'password'" x-model="cfg.api_key" placeholder="sk-...">
+              <button type="button" class="btn" @click="showKey=!showKey" x-text="showKey?'隐藏':'显示'"></button>
+            </div>
+          </div>
+        </div>
+
+
+        <div class="card" style="max-width:560px">
+          <div class="card-title">Token 自动刷新</div>
+          <div class="flex items-center gap-2" style="margin-bottom:12px">
+            <span class="badge" :class="refreshStatus.active?'badge-ok':'badge-gray'"
+              x-text="refreshStatus.active?'运行中':'未启动'"></span>
+            <span class="text-muted text-sm" x-show="refreshStatus.lastRun>0"
+              x-text="'上次：' + fmtTime(new Date(refreshStatus.lastRun).toISOString())"></span>
+            <button type="button" class="btn ml-auto" @click="manualRefreshTokens()">
+              <svg x-show="loading.refreshTokens||refreshStatus.isRefreshing" class="spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.22-8.56"/></svg>
+              <span x-text="loading.refreshTokens||refreshStatus.isRefreshing?'刷新中…':'立即刷新'"></span>
+            </button>
+          </div>
+          <div class="form-row">
+            <label class="form-label">自动刷新间隔（分钟，最小 5）</label>
+            <input type="number" min="5" max="1440" step="5" x-model.number="cfg.token_refresh_interval_minutes" style="max-width:160px">
+          </div>
+          <p x-show="refreshStatus.lastSummary" class="text-muted text-sm mt-2"
+            x-text="refreshStatus.lastSummary ? '上次结果：' + refreshStatus.lastSummary.ok + ' 成功 / ' + refreshStatus.lastSummary.fail + ' 失败 / ' + refreshStatus.lastSummary.skipped + ' 跳过' : ''"></p>
+        </div>
+      </div>
+
+    </div><!-- /main-area -->
+  </div><!-- /app-shell -->
+
+  <!-- ── ADD ACCOUNT MODAL ── -->
+  <div class="overlay" x-show="showAdd" x-cloak @keydown.escape.window="showAdd=false">
+    <div class="modal" @click.stop>
+      <div class="modal-header">
+        <span class="modal-title">添加账号</span>
+        <button type="button" class="modal-close" @click="showAdd=false">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="tab-bar">
+        <div class="tab-item" :class="af.mode==='json'&&'active'" @click="af.mode='json'">粘贴 auth.json</div>
+        <div class="tab-item" :class="af.mode==='manual'&&'active'" @click="af.mode='manual'">手动填写</div>
+      </div>
+      <div class="form-row">
+        <label class="form-label">账号名称（可选）</label>
+        <input type="text" x-model="af.name" placeholder="如：账号 1">
+      </div>
+      <div class="form-row">
+        <label class="form-label">代理 URL（可选）</label>
+        <input type="text" class="mono" x-model="af.proxy" placeholder="如：http://127.0.0.1:7890">
+      </div>
+      <div x-show="af.mode==='json'">
+        <div class="form-row">
+          <label class="form-label">auth.json 内容</label>
+          <textarea x-model="af.authJson" rows="5" placeholder='{"access_token":"sk-...","account_id":"user-...","refresh_token":"..."}'></textarea>
+        </div>
+      </div>
+      <div x-show="af.mode==='manual'">
+        <div class="form-row">
+          <label class="form-label">Access Token</label>
+          <input type="text" class="mono" x-model="af.access_token" placeholder="sk-...">
+        </div>
+        <div class="form-row">
+          <label class="form-label">Account ID</label>
+          <input type="text" class="mono" x-model="af.account_id" placeholder="user-...">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn" @click="showAdd=false">取消</button>
+        <button type="button" class="btn btn-primary" @click="submitAdd()" :class="{'btn-dis':loading.addAcc}">
+          <svg x-show="loading.addAcc" class="spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.22-8.56"/></svg>
+          确认添加
+        </button>
+      </div>
     </div>
-    <div id="add-proxy-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:999;align-items:center;justify-content:center" onclick="if(event.target===this)this.style.display='none'">
-        <div style="background:#fff;border-radius:12px;padding:40px;max-width:560px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3);position:relative">
-            <button onclick="document.getElementById('add-proxy-modal').style.display='none'" style="position:absolute;top:16px;right:16px;background:none;border:none;font-size:24px;cursor:pointer;color:#94a3b8">&times;</button>
-            <h3 style="font-size:24px;font-weight:600;color:#0a1628;margin-bottom:8px">Contribute Proxy IP</h3>
-            <p style="font-size:14px;color:#4a5568;line-height:1.6;margin-bottom:16px">Enter static proxies, one per line. Supported: <code style="background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:13px">http://</code> <code style="background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:13px">socks5://</code></p>
+  </div>
 
-            <textarea id="proxy-input" placeholder="socks5://user:pass@host:port&#10;http://user:pass@host:port" style="width:100%;height:120px;background:#0f172a;color:#e2e8f0;border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:14px 16px;font-family:monospace;font-size:13px;resize:vertical;outline:none;margin-bottom:16px"></textarea>
+  <!-- ── BATCH IMPORT MODAL ── -->
+  <div class="overlay" x-show="showBatchImport" x-cloak @keydown.escape.window="showBatchImport=false">
+    <div class="modal" @click.stop style="max-width:550px">
+      <div class="modal-header">
+        <span class="modal-title">批量导入账号</span>
+        <button type="button" class="modal-close" @click="showBatchImport=false">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      
+      <div class="form-row">
+        <label class="form-label">上传 TXT 文件（一行一个 Refresh Token）</label>
+        <input type="file" accept=".txt" @change="handleBatchImportFile($event)" style="padding: 6px 0;">
+      </div>
+      
+      <div class="form-row">
+        <label class="form-label">或 直接粘贴 Refresh Tokens（一行一个）</label>
+        <textarea x-model="batchImportText" rows="6" placeholder="输入或粘贴 Refresh Tokens，每行一个..."></textarea>
+      </div>
 
-            <button onclick="submitProxies()" style="width:100%;background:#533afd;color:#fff;border:none;border-radius:8px;padding:12px;font-size:15px;font-weight:600;cursor:pointer;transition:background 0.2s" onmouseover="this.style.background='#4434d4'" onmouseout="this.style.background='#533afd'">Submit</button>
-            <p id="proxy-status" style="font-size:13px;color:#94a3b8;margin-top:12px;text-align:center"></p>
-        </div>
+      <div x-show="batchImportResults && batchImportResults.length > 0" class="form-row" style="max-height: 180px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; padding: 10px; background: #FAF9F6;">
+        <label class="form-label" style="margin-bottom: 6px;">导入结果：</label>
+        <template x-for="(res, idx) in batchImportResults" :key="idx">
+          <div class="text-xs" style="margin-bottom: 4px; display: flex; justify-content: space-between;">
+            <span class="mono" x-text="res.token"></span>
+            <span :class="res.status === 'success' ? 'badge badge-ok' : 'badge badge-err'" x-text="res.status === 'success' ? '成功' : '失败: ' + res.error"></span>
+          </div>
+        </template>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn" @click="showBatchImport=false">关闭</button>
+        <button type="button" class="btn btn-primary" @click="submitBatchImport()" :class="{'btn-loading':loading.batchImport}">
+          <svg x-show="loading.batchImport" class="spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.22-8.56"/></svg>
+          开始导入
+        </button>
+      </div>
     </div>
-    <script>
-        let currentLang = 'python';
-        let currentMode = 'sync';
-        function showCode(lang) {
-            currentLang = lang;
-            document.querySelectorAll('.code-tab').forEach(t => t.classList.remove('active'));
-            event.target.classList.add('active');
-                updateCode();
-        }
-        function setMode(mode) {
-            currentMode = mode;
-            document.querySelectorAll('.mode-btn').forEach(t => t.classList.remove('active'));
-            event.target.classList.add('active');
-            updateCode();
-        }
-        function setModel(model) {
-            document.querySelectorAll('[data-model]').forEach(el => {
-                el.textContent = '"' + model + '"';
-            });
-        }
-        function updateCode() {
-            document.querySelectorAll('.code-block[id^="code-"]').forEach(b => b.classList.add('hidden'));
-            const el = document.getElementById('code-' + currentLang + '-' + currentMode);
-            if (el) el.classList.remove('hidden');
-        }
-        // 动态获取模型和账号统计
+  <!-- ── BIND PROXY MODAL ── -->
+  <div class="overlay" x-show="showBindProxy" x-cloak @keydown.escape.window="showBindProxy=false">
+    <div class="modal" @click.stop style="max-width:420px">
+      <div class="modal-header">
+        <span class="modal-title" x-text="'绑定代理 - ' + getAccName(proxyEditIndex)"></span>
+        <button type="button" class="modal-close" @click="showBindProxy=false">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="form-row">
+        <label class="form-label">代理 URL</label>
+        <input type="text" class="mono" x-model="proxyEditUrl" placeholder="例如：http://127.0.0.1:7890">
+        <p class="text-dim text-xs mt-1">留空表示直连。支持 http、https、socks 代理。</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn" @click="showBindProxy=false">取消</button>
+        <button type="button" class="btn btn-primary" @click="submitBindProxy()" :class="{'btn-loading':loading.bindProxy}">
+          <svg x-show="loading.bindProxy" class="spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.22-8.56"/></svg>
+          确定
+        </button>
+      </div>
+    </div>
+  </div>
 
-        // 动态获取账号统计
-        async function loadStats() {
-            try {
-                const [statsRes, proxyRes] = await Promise.all([
-                    fetch("/api/stats"),
-                    fetch("/api/proxies")
-                ]);
-                const data = await statsRes.json();
-                const proxyData = await proxyRes.json();
-                const acc = document.getElementById("stat-accounts");
-                const pro = document.getElementById("stat-proxies");
-                if (acc && acc.textContent != data.accounts) {
-                    acc.textContent = data.accounts;
-                    acc.style.transition = "transform 0.3s";
-                    acc.style.transform = "scale(1.2)";
-                    setTimeout(() => acc.style.transform = "scale(1)", 300);
-                }
-                if (pro && pro.textContent != proxyData.total) {
-                    pro.textContent = proxyData.total;
-                    pro.style.transition = "transform 0.3s";
-                    pro.style.transform = "scale(1.2)";
-                    setTimeout(() => pro.style.transform = "scale(1)", 300);
-                }
-            } catch(e) { console.warn("loadStats failed:", e); }
-        }
-        // 每 5 秒自动刷新统计
-        setInterval(loadStats, 5000);
-        // OAuth 回调处理
-        function handleOAuthCallback() {
-            const params = new URLSearchParams(window.location.search);
-            if (params.get("oauth") === "success") {
-                const bar = document.querySelector(".models-bar");
-                if (bar) bar.insertAdjacentHTML("beforebegin",
-                    `<div style="background:rgba(16,185,129,0.12);color:#047857;padding:8px 16px;border-radius:6px;margin-bottom:16px;font-size:14px">
-                    Account added successfully! Welcome aboard.
-                    </div>`);
-                history.replaceState(null, "", window.location.pathname);
-                loadStats();
-            }
-        }
-        document.addEventListener("DOMContentLoaded", () => { loadStats(); handleOAuthCallback(); });
+</div><!-- /x-data -->
 
-        async function submitProxies() {
-            const input = document.getElementById('proxy-input');
-            const status = document.getElementById('proxy-status');
-            const lines = input.value.split('\n').map(l => l.trim()).filter(l => l && (l.startsWith('http://') || l.startsWith('https://') || l.startsWith('socks5://') || l.startsWith('socks4://')));
-            if (!lines.length) { status.textContent = 'Please enter valid proxy URLs'; status.style.color = '#ef4444'; return; }
-            status.textContent = 'Submitting...'; status.style.color = '#94a3b8';
-            try {
-                const res = await fetch('/api/proxies/add', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ proxies: lines }) });
-                const data = await res.json();
-                if (res.ok) { status.textContent = '🎉 Thank you! ' + lines.length + ' proxy(es) added.'; status.style.color = '#10b981'; input.value = ''; }
-                else { status.textContent = 'Error: ' + (data.error || 'Unknown'); status.style.color = '#ef4444'; }
-            } catch(e) { status.textContent = 'Connection failed'; status.style.color = '#ef4444'; }
-        }
-        function copyCode(btn) {
-            const code = btn.parentElement.querySelector('code');
-            const text = code.textContent;
-            navigator.clipboard.writeText(text).then(() => {
-                btn.textContent = 'Copied!';
-                btn.classList.add('copied');
-                setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
-            });
-        }
-    </script>
 </body>
 </html>

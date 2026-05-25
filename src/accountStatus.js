@@ -20,6 +20,10 @@ export function isAccountUnavailable(accountId) {
   return accountId ? unavailableIds.has(String(accountId)) : false;
 }
 
+export function unmarkAccountUnavailable(accountId) {
+  if (accountId) unavailableIds.delete(String(accountId));
+}
+
 // ── 生图额度耗尽标记（持久化，24h 自动重置）──
 
 function loadExhausted() {

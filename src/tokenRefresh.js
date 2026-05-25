@@ -15,8 +15,9 @@ import { readFile, writeFile, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { getProxyAgent } from './proxyAgent.js';
 
-const __dirname = dirname(fileURLToPath(new URL('.', import.meta.url)));
+const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = process.env.CODEX_DATA_DIR || join(__dirname, '..', 'data');
 
 const TOKEN_URL = 'https://auth.openai.com/oauth/token';
@@ -48,17 +49,19 @@ async function saveAccounts(list) {
  * 用 refresh_token 换取新的 access_token
  * @returns {{ access_token, refresh_token?, expires_in? }}
  */
-async function refreshAccessToken(refreshToken) {
+export async function refreshAccessToken(refreshToken, proxyUrl = null) {
   const body = new URLSearchParams({
     grant_type: 'refresh_token',
     refresh_token: refreshToken,
     client_id: CLIENT_ID,
   });
 
+  const dispatcher = getProxyAgent(proxyUrl);
   const res = await fetch(TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: body.toString(),
+    dispatcher,
   });
 
   if (!res.ok) {
@@ -93,8 +96,9 @@ export async function refreshTokenForAccount(accountIndex) {
     return null;
   }
 
+  const proxyUrl = account.proxy || null;
   try {
-    const result = await refreshAccessToken(refreshToken);
+    const result = await refreshAccessToken(refreshToken, proxyUrl);
 
     // 更新 accounts.json
     if (account.access_token !== undefined) {

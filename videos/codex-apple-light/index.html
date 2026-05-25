@@ -1,0 +1,628 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: #fbfbf8;
+        color: #1d1d1f;
+        font-family: Inter, "Segoe UI", sans-serif;
+      }
+
+      #root {
+        position: relative;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at 14% 18%, rgba(0, 102, 204, 0.14), rgba(251, 251, 248, 0) 31%),
+          radial-gradient(circle at 86% 76%, rgba(11, 111, 58, 0.1), rgba(251, 251, 248, 0) 29%),
+          linear-gradient(135deg, #fbfbf8 0%, #f7f7f4 100%);
+      }
+
+      .film {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+      }
+
+      .grain {
+        position: absolute;
+        inset: 0;
+        opacity: 0.2;
+        background-image:
+          linear-gradient(rgba(29, 29, 31, 0.03) 1px, rgba(251, 251, 248, 0) 1px),
+          linear-gradient(90deg, rgba(29, 29, 31, 0.025) 1px, rgba(251, 251, 248, 0) 1px);
+        background-size: 64px 64px;
+      }
+
+      .frame-rule {
+        position: absolute;
+        inset: 28px;
+        border: 2px solid rgba(217, 217, 212, 0.74);
+        border-radius: 34px;
+        pointer-events: none;
+      }
+
+      .intro-copy {
+        position: absolute;
+        left: 112px;
+        top: 92px;
+        width: 620px;
+      }
+
+      .label {
+        color: #0066cc;
+        font-size: 24px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .headline {
+        margin: 22px 0 0;
+        max-width: 680px;
+        font-size: 82px;
+        line-height: 0.98;
+        font-weight: 850;
+        letter-spacing: -0.045em;
+      }
+
+      .support {
+        margin: 28px 0 0;
+        max-width: 620px;
+        color: #515154;
+        font-size: 30px;
+        line-height: 1.28;
+        font-weight: 430;
+      }
+
+      .app-window {
+        position: absolute;
+        left: 112px;
+        top: 234px;
+        width: 1696px;
+        height: 742px;
+        overflow: hidden;
+        display: grid;
+        grid-template-columns: 314px 1fr 430px;
+        grid-template-rows: 60px 1fr;
+        border: 2px solid #d9d9d4;
+        border-radius: 34px;
+        background: #ffffff;
+        box-shadow: 0 48px 130px rgba(29, 29, 31, 0.16);
+      }
+
+      .mac-bar {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 0;
+        height: 60px;
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        padding: 0 24px;
+        background: #ececea;
+        border-bottom: 2px solid #d9d9d4;
+        z-index: 4;
+      }
+
+      .control {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+      }
+
+      .red { background: #ff5f57; }
+      .yellow { background: #ffbd2e; }
+      .green { background: #28c840; }
+
+      .titlebar-name {
+        margin-left: 18px;
+        color: #515154;
+        font-size: 20px;
+        font-weight: 700;
+      }
+
+      .sidebar {
+        grid-column: 1;
+        grid-row: 1 / span 2;
+        min-height: 0;
+        padding: 92px 24px 24px;
+        background: #f7f7f4;
+        border-right: 2px solid #d9d9d4;
+      }
+
+      .side-title {
+        color: #1d1d1f;
+        font-size: 28px;
+        font-weight: 820;
+        letter-spacing: -0.02em;
+      }
+
+      .side-muted {
+        margin-top: 9px;
+        color: #515154;
+        font-size: 20px;
+      }
+
+      .repo-list {
+        margin-top: 34px;
+        display: grid;
+        gap: 14px;
+      }
+
+      .repo-item {
+        padding: 18px 18px;
+        border: 2px solid #d9d9d4;
+        border-radius: 18px;
+        background: #ffffff;
+        color: #515154;
+        font-size: 21px;
+        font-weight: 700;
+      }
+
+      .repo-item.active {
+        border-color: #0066cc;
+        color: #003a75;
+        background: #f0f7ff;
+      }
+
+      .main-chat {
+        position: relative;
+        grid-column: 2;
+        grid-row: 1 / span 2;
+        min-height: 0;
+        padding: 92px 40px 40px;
+        background: #fbfbf8;
+        border-right: 2px solid #d9d9d4;
+      }
+
+      .chat-stream {
+        display: grid;
+        gap: 18px;
+      }
+
+      .message {
+        max-width: 780px;
+        padding: 23px 26px;
+        border: 2px solid #d9d9d4;
+        border-radius: 24px;
+        background: #ffffff;
+        box-shadow: 0 16px 46px rgba(29, 29, 31, 0.055);
+        color: #1d1d1f;
+        font-size: 25px;
+        line-height: 1.34;
+      }
+
+      .message.user {
+        margin-left: auto;
+        border-color: #b7d7ff;
+        background: #f0f7ff;
+        color: #003a75;
+      }
+
+      .message.codex strong {
+        display: block;
+        margin-bottom: 8px;
+        color: #0066cc;
+        font-size: 22px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      .tool-strip {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 14px;
+        margin-top: 22px;
+      }
+
+      .tool-card {
+        min-height: 120px;
+        padding: 17px 18px;
+        border: 2px solid #d9d9d4;
+        border-radius: 18px;
+        background: #ffffff;
+        color: #515154;
+        font-size: 19px;
+        line-height: 1.2;
+        box-shadow: 0 14px 38px rgba(29, 29, 31, 0.055);
+      }
+
+      .tool-card em {
+        display: block;
+        margin-bottom: 10px;
+        color: #0066cc;
+        font-style: normal;
+        font-family: Consolas, "Courier New", monospace;
+        font-size: 17px;
+        font-weight: 800;
+      }
+
+      .composer {
+        position: absolute;
+        left: 40px;
+        right: 40px;
+        bottom: 34px;
+        height: 92px;
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        padding: 0 24px;
+        border: 2px solid #d9d9d4;
+        border-radius: 26px;
+        background: #ffffff;
+        box-shadow: 0 20px 60px rgba(29, 29, 31, 0.08);
+        color: #515154;
+        font-size: 25px;
+      }
+
+      .typed {
+        color: #1d1d1f;
+        font-weight: 650;
+      }
+
+      .cursor {
+        width: 13px;
+        height: 31px;
+        background: #0066cc;
+      }
+
+      .send-dot {
+        margin-left: auto;
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        background: #0066cc;
+        position: relative;
+      }
+
+      .send-dot::before {
+        content: "";
+        width: 14px;
+        height: 14px;
+        border-left: 4px solid #ffffff;
+        border-top: 4px solid #ffffff;
+        transform: rotate(45deg) translate(2px, 2px);
+      }
+
+      .activity {
+        grid-column: 3;
+        grid-row: 1 / span 2;
+        min-height: 0;
+        padding: 92px 28px 30px;
+        background: #ffffff;
+      }
+
+      .panel-title {
+        color: #1d1d1f;
+        font-size: 27px;
+        font-weight: 830;
+        letter-spacing: -0.02em;
+      }
+
+      .activity-list {
+        margin-top: 22px;
+        display: grid;
+        gap: 14px;
+      }
+
+      .activity-row {
+        padding: 16px 18px;
+        border: 2px solid #d9d9d4;
+        border-radius: 18px;
+        background: #fbfbf8;
+      }
+
+      .activity-row .k {
+        color: #515154;
+        font-family: Consolas, "Courier New", monospace;
+        font-size: 18px;
+        font-weight: 800;
+      }
+
+      .activity-row .v {
+        margin-top: 7px;
+        color: #1d1d1f;
+        font-size: 20px;
+        font-weight: 700;
+      }
+
+      .activity-row.pass {
+        border-color: #bde4cd;
+        background: #e9f7ef;
+      }
+
+      .activity-row.pass .k,
+      .activity-row.pass .v {
+        color: #0b6f3a;
+      }
+
+      .diff-card {
+        margin-top: 24px;
+        padding: 20px;
+        border: 2px solid #d9d9d4;
+        border-radius: 22px;
+        background: #ffffff;
+        font-family: Consolas, "Courier New", monospace;
+        box-shadow: 0 18px 48px rgba(29, 29, 31, 0.07);
+      }
+
+      .diff-head {
+        display: flex;
+        justify-content: space-between;
+        color: #515154;
+        font-size: 17px;
+        margin-bottom: 14px;
+      }
+
+      .diff-line {
+        padding: 8px 10px;
+        border-radius: 10px;
+        color: #515154;
+        font-size: 18px;
+        line-height: 1.2;
+      }
+
+      .diff-line.add {
+        color: #0b6f3a;
+        background: #e9f7ef;
+        font-weight: 800;
+      }
+
+      .completion-card {
+        position: absolute;
+        right: 112px;
+        top: 92px;
+        width: 610px;
+        padding: 34px 38px;
+        border: 2px solid #b7d7ff;
+        border-radius: 28px;
+        background: #f0f7ff;
+        box-shadow: 0 40px 110px rgba(0, 102, 204, 0.14);
+      }
+
+      .completion-card h2 {
+        margin: 0;
+        color: #003a75;
+        font-size: 58px;
+        line-height: 1;
+        letter-spacing: -0.04em;
+      }
+
+      .completion-card p {
+        margin: 18px 0 0;
+        color: #245b8f;
+        font-size: 25px;
+        line-height: 1.28;
+      }
+
+      .timeline {
+        position: absolute;
+        left: 112px;
+        right: 112px;
+        bottom: 42px;
+        height: 74px;
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 14px;
+      }
+
+      .beat {
+        position: relative;
+        overflow: hidden;
+        padding: 12px 17px;
+        border: 2px solid #d9d9d4;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.86);
+        color: #515154;
+        font-size: 18px;
+        line-height: 1.12;
+        font-weight: 720;
+      }
+
+      .beat small {
+        display: block;
+        margin-bottom: 6px;
+        color: #6e6e73;
+        font-family: Consolas, "Courier New", monospace;
+        font-size: 14px;
+        font-weight: 760;
+      }
+
+      .beat.done {
+        background: #f0f7ff;
+        color: #003a75;
+        border-color: #b7d7ff;
+      }
+
+      .beat-fill {
+        position: absolute;
+        inset: auto 0 0;
+        height: 5px;
+        transform-origin: left;
+        transform: scaleX(0);
+        background: #0066cc;
+      }
+
+      .beat.done .beat-fill {
+        background: #0b6f3a;
+      }
+
+      audio.clip {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="50"
+      data-width="1920"
+      data-height="1080"
+    >
+      <audio
+        id="mix"
+        class="clip"
+        data-start="0"
+        data-duration="50"
+        data-track-index="10"
+        src="assets/codex-apple-light-mix.wav"
+      ></audio>
+
+      <div id="film" class="clip film" data-start="0" data-duration="50" data-track-index="1">
+        <div class="grain" data-layout-ignore></div>
+        <div class="frame-rule"></div>
+
+        <div class="intro-copy">
+          <div class="label">Codex local workflow</div>
+          <h1 class="headline">From request to reviewed patch.</h1>
+          <p class="support">A realistic Codex session: prompt, inspect the repo, edit files, run checks, and return the result.</p>
+        </div>
+
+        <div class="completion-card">
+          <h2>Ready for review.</h2>
+          <p>Changes are summarized with the exact files and verification command.</p>
+        </div>
+
+        <div class="app-window">
+          <div class="mac-bar">
+            <span class="control red"></span>
+            <span class="control yellow"></span>
+            <span class="control green"></span>
+            <span class="titlebar-name">Codex - codexProapi</span>
+          </div>
+
+          <aside class="sidebar">
+            <div class="side-title">Workspaces</div>
+            <div class="side-muted">Local coding agent</div>
+            <div class="repo-list">
+              <div class="repo-item active">codexProapi</div>
+              <div class="repo-item">docs / specs</div>
+              <div class="repo-item">videos / output</div>
+            </div>
+          </aside>
+
+          <main class="main-chat">
+            <div class="chat-stream">
+              <div class="message user">Fix the diagnosis extraction bug and verify the behavior.</div>
+              <div class="message codex codex-1"><strong>Codex</strong>I’ll read the relevant files first, then make the smallest patch that preserves the existing flow.</div>
+              <div class="tool-strip">
+                <div class="tool-card tool-1"><em>rg</em>Find diagnosis extraction references.</div>
+                <div class="tool-card tool-2"><em>read</em>Open the analysis and handoff files.</div>
+                <div class="tool-card tool-3"><em>plan</em>Patch only the extraction boundary.</div>
+              </div>
+              <div class="message codex codex-2"><strong>Codex</strong>I found the mismatch. Applying a focused normalization before the optimization handoff.</div>
+            </div>
+
+            <div class="composer">
+              <span class="typed" id="typed-prompt"></span><span class="cursor" id="cursor"></span>
+              <span class="send-dot" aria-label="Send"></span>
+            </div>
+          </main>
+
+          <aside class="activity">
+            <div class="panel-title">Activity</div>
+            <div class="activity-list">
+              <div class="activity-row act-1"><div class="k">files</div><div class="v">3 files inspected</div></div>
+              <div class="activity-row act-2"><div class="k">edit</div><div class="v">focused patch drafted</div></div>
+              <div class="activity-row pass act-3"><div class="k">verify</div><div class="v">npm run check passed</div></div>
+            </div>
+
+            <div class="diff-card">
+              <div class="diff-head"><span>patch preview</span><span>analysis.ts</span></div>
+              <div class="diff-line"> const diagnosis = result.diagnosis;</div>
+              <div class="diff-line add">+ const issue = normalizeIssuePayload(result);</div>
+              <div class="diff-line add">+ return buildHandoff(issue.summary);</div>
+            </div>
+          </aside>
+        </div>
+
+        <div class="timeline">
+          <div class="beat beat-1"><small>00-06s</small>Prompt<div class="beat-fill"></div></div>
+          <div class="beat beat-2"><small>06-16s</small>Inspect repo<div class="beat-fill"></div></div>
+          <div class="beat beat-3"><small>16-31s</small>Edit patch<div class="beat-fill"></div></div>
+          <div class="beat beat-4"><small>31-43s</small>Verify<div class="beat-fill"></div></div>
+          <div class="beat beat-5 done"><small>43-50s</small>Review<div class="beat-fill"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+
+      const tl = gsap.timeline({ paused: true });
+      const promptText = "根据文档继续视频制作，按真实 Codex 工作流修正。";
+      const typed = document.querySelector("#typed-prompt");
+      const cursor = document.querySelector("#cursor");
+      const typing = { count: 0 };
+
+      gsap.set([".app-window", ".timeline", ".completion-card"], { opacity: 0 });
+      gsap.set([".codex-1", ".codex-2", ".tool-card", ".activity-row", ".diff-card"], { opacity: 0 });
+      gsap.set(".completion-card", { y: -24, scale: 0.985 });
+      gsap.set(".beat-fill", { scaleX: 0 });
+
+      tl.fromTo(".grain", { opacity: 0 }, { opacity: 0.2, duration: 1.2, ease: "sine.out" }, 0.1);
+      tl.fromTo(".frame-rule", { opacity: 0, scale: 0.992 }, { opacity: 1, scale: 1, duration: 1.1, ease: "power1.out" }, 0.1);
+      tl.fromTo(".intro-copy", { opacity: 0, x: -46 }, { opacity: 1, x: 0, duration: 1, ease: "expo.out" }, 0.24);
+      tl.fromTo(".app-window", { opacity: 0, y: 60, scale: 0.975 }, { opacity: 1, y: 0, scale: 1, duration: 1.2, ease: "power3.out" }, 0.72);
+      tl.fromTo(".timeline", { opacity: 0, y: 28 }, { opacity: 1, y: 0, duration: 0.75, ease: "power2.out" }, 1.08);
+      tl.to(".beat-1 .beat-fill", { scaleX: 1, duration: 6, ease: "none" }, 0);
+
+      tl.to(typing, {
+        count: promptText.length,
+        duration: 3.7,
+        ease: "none",
+        onUpdate: () => {
+          typed.textContent = promptText.slice(0, Math.floor(typing.count));
+        },
+      }, 1.35);
+      tl.to(cursor, { opacity: 0, duration: 0.18, repeat: 16, yoyo: true, ease: "steps(1)" }, 1.35);
+
+      tl.to(".beat-2 .beat-fill", { scaleX: 1, duration: 10, ease: "none" }, 6);
+      tl.fromTo(".codex-1", { opacity: 0, y: 22 }, { opacity: 1, y: 0, duration: 0.55, ease: "power2.out" }, 6.25);
+      tl.fromTo(".tool-1", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.5, ease: "power3.out" }, 7.15);
+      tl.fromTo(".tool-2", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.52, ease: "circ.out" }, 7.62);
+      tl.fromTo(".tool-3", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.54, ease: "power1.out" }, 8.12);
+      tl.fromTo(".act-1", { opacity: 0, x: 30 }, { opacity: 1, x: 0, duration: 0.55, ease: "power2.out" }, 8.75);
+      tl.to(".tool-card", { y: -8, duration: 3.2, ease: "sine.inOut", yoyo: true, repeat: 1, stagger: 0.08 }, 10.4);
+
+      tl.to(".beat-3 .beat-fill", { scaleX: 1, duration: 15, ease: "none" }, 16);
+      tl.fromTo(".codex-2", { opacity: 0, y: 22 }, { opacity: 1, y: 0, duration: 0.55, ease: "power2.out" }, 16.25);
+      tl.fromTo(".diff-card", { opacity: 0, y: 34, scale: 0.985 }, { opacity: 1, y: 0, scale: 1, duration: 0.75, ease: "power3.out" }, 17.1);
+      tl.fromTo(".diff-line", { opacity: 0, x: 20 }, { opacity: 1, x: 0, duration: 0.35, stagger: 0.24, ease: "power1.out" }, 17.7);
+      tl.fromTo(".act-2", { opacity: 0, x: 30 }, { opacity: 1, x: 0, duration: 0.55, ease: "power2.out" }, 20.2);
+      tl.to(".diff-card", { boxShadow: "0 28px 86px rgba(11,111,58,0.18)", duration: 1.1, ease: "sine.inOut", yoyo: true, repeat: 3 }, 22);
+
+      tl.to(".beat-4 .beat-fill", { scaleX: 1, duration: 12, ease: "none" }, 31);
+      tl.fromTo(".act-3", { opacity: 0, x: 30 }, { opacity: 1, x: 0, duration: 0.55, ease: "power3.out" }, 31.4);
+      tl.to(".app-window", { y: -10, duration: 3.5, ease: "sine.inOut", yoyo: true, repeat: 1 }, 34.5);
+      tl.to(".act-3", { boxShadow: "0 18px 54px rgba(11,111,58,0.16)", duration: 0.9, ease: "sine.inOut", yoyo: true, repeat: 3 }, 35.2);
+
+      tl.to(".beat-5 .beat-fill", { scaleX: 1, duration: 7, ease: "none" }, 43);
+      tl.fromTo(".completion-card", { opacity: 0, y: -24, scale: 0.985 }, { opacity: 1, y: 0, scale: 1, duration: 0.85, ease: "power3.out" }, 43.05);
+      tl.to(".intro-copy", { opacity: 0.35, duration: 0.8, ease: "sine.inOut" }, 43.1);
+      tl.to(".app-window", { scale: 0.985, y: 18, duration: 1.1, ease: "power1.inOut" }, 43.15);
+      tl.to(".completion-card", { boxShadow: "0 52px 130px rgba(0,102,204,0.2)", duration: 1.5, ease: "sine.inOut", yoyo: true, repeat: 2 }, 44);
+
+      window.__timelines["main"] = tl;
+    </script>
+  </body>
+</html>

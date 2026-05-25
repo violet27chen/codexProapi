@@ -13,11 +13,27 @@ import {
   deleteAccount,
   loadAccountsForProxy,
   getAccountsPath,
+  batchAddAccounts,
+  updateAccountProxy,
 } from './accounts.js';
 import { getAuthorizeUrl, exchangeCodeForToken } from './oauth.js';
 import { isAccountUnavailable } from './accountStatus.js';
 import { getRemainingPct, getUsedTokens, QUOTA } from './usageTracker.js';
 import { generateImage, getCachedImage, fetchImageBytes } from './imagegen.js';
+import {
+  getAvailableModelsOpenAI,
+  getModelsStatus,
+  refreshModels,
+  initialProbe,
+  checkAllAccountsHealth,
+} from './models.js';
+import {
+  startAutoRefresh,
+  stopAutoRefresh,
+  refreshAllAccounts,
+  getAutoRefreshStatus,
+} from './tokenAutoRefresh.js';
+import { refreshAccessToken } from './tokenRefresh.js';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const app = express();
@@ -25,8 +41,8 @@ const app = express();
 app.set('trust proxy', true);
 const PORT = Number(process.env.PORT) || 1455;
 const AUTH_PATH = process.env.CODEX_AUTH_PATH || null;
-const EMAIL_SERVICE_URL = (process.env.EMAIL_SERVICE_URL || 'https://kami666.xyz').replace(/\/$/, '');
-const ONECLICK_DOMAINS = ['qxfy.store', 'deploytools.site', 'loginvipcursor.icu', 'kami666.xyz', 'free.202602dashi27.top'];
+const EMAIL_SERVICE_URL = (process.env.EMAIL_SERVICE_URL || 'https://free.violetteam.cloud').replace(/\/$/, '');
+const ONECLICK_DOMAINS = ['free.violetteam.cloud', 'qxfy.store', 'deploytools.site', 'loginvipcursor.icu', 'kami666.xyz'];
 
 function getConfigPath() {
   return join(dirname(getAccountsPath()), 'config.json');
@@ -35,16 +51,29 @@ function loadConfig() {
   try {
     const raw = readFileSync(getConfigPath(), 'utf8');
     const j = JSON.parse(raw);
-    return { api_key: typeof j.api_key === 'string' ? j.api_key : '' };
+    return {
+      api_key: typeof j.api_key === 'string' ? j.api_key : '',
+      token_refresh_interval_minutes:
+        Number.isFinite(Number(j.token_refresh_interval_minutes))
+          ? Math.max(5, Number(j.token_refresh_interval_minutes))
+          : 60,
+    };
   } catch {
-    return { api_key: '' };
+    return { api_key: '', token_refresh_interval_minutes: 60 };
   }
 }
 function saveConfig(obj) {
   const p = getConfigPath();
   const dir = dirname(p);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  writeFileSync(p, JSON.stringify({ api_key: obj.api_key ?? '' }, null, 2), 'utf8');
+  const out = {
+    api_key: obj.api_key ?? '',
+    token_refresh_interval_minutes:
+      Number.isFinite(Number(obj.token_refresh_interval_minutes))
+        ? Math.max(5, Number(obj.token_refresh_interval_minutes))
+        : 60,
+  };
+  writeFileSync(p, JSON.stringify(out, null, 2), 'utf8');
 }
 
 function randomLocalPart(len = 10) {
@@ -116,6 +145,10 @@ app.put('/api/config', (req, res) => {
   app.get('/api/version', (req, res) => res.json({ version: '0.0.0' }));
 }
 
+app.get('/', (req, res) => {
+  res.set({ 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache', 'Expires': '0' });
+  res.sendFile(join(__dirname, '..', 'public', 'index.html'));
+});
 app.use(express.static(join(__dirname, '..', 'public')));
 
 const requestLogs = [];
@@ -196,16 +229,6 @@ app.get('/auth/callback', async (req, res) => {
     const { access_token, account_id, refresh_token, email } = await exchangeCodeForToken(code, redirectUri, state);
     addAccount({ access_token, account_id, refresh_token, source: 'oauth', name: email || undefined });
     refreshAuthProvider();
-    // 如果设置了 REMOTE_URL，自动中转 token 到远程服务器
-    const remoteUrl = (process.env.REMOTE_URL || '').replace(/\/+$/, '');
-    if (remoteUrl) {
-      fetch(`${remoteUrl}/api/accounts/add`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ access_token, account_id, refresh_token, name: email || undefined }),
-      }).then(r => console.log(`[relay] Pushed to remote: ${r.status}`))
-        .catch(e => console.error('[relay] Push failed:', e.message));
-    }
     res.redirect(302, '/?oauth=success');
   } catch (e) {
     console.error('OAuth callback error:', e.message, '| redirect_uri:', redirectUri);
@@ -217,80 +240,33 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'codex-proapi' });
 });
 
-app.get('/favicon.ico', (req, res) => res.status(204).end());
-
 app.get('/v1/models', (req, res) => {
   res.json({
     object: 'list',
-    data: [
-      { id: 'gpt-5.5', object: 'model', created: 1687882411, owned_by: 'openai' },
-      { id: 'gpt-5.4', object: 'model', created: 1687882411, owned_by: 'openai' },
-      { id: 'gpt-5.3-codex', object: 'model', created: 1687882411, owned_by: 'openai' },
-      { id: 'gpt-5.2', object: 'model', created: 1687882411, owned_by: 'openai' },
-      { id: 'gpt-image-2', object: 'model', created: 1687882411, owned_by: 'openai' },
-    ],
+    data: getAvailableModelsOpenAI(),
   });
 });
 
-// 账号统计接口 - 前端动态获取
-app.get('/api/stats', (req, res) => {
-  const { accounts } = listAccountsForApi();
-  res.json({ accounts: accounts.length });
+app.get('/api/models', (req, res) => {
+  res.json(getModelsStatus());
 });
 
-// 远程账号中转接口 - 本地 OAuth 完成后推送 token 到此处
-app.post('/api/accounts/add', express.json(), (req, res) => {
-  const { access_token, account_id, refresh_token, name } = req.body || {};
-  if (!access_token || !account_id) {
-    return res.status(400).json({ error: 'missing access_token or account_id' });
-  }
+app.post('/api/models/refresh', async (req, res) => {
   try {
-    addAccount({ access_token, account_id, refresh_token: refresh_token || '', source: 'oauth-relay', name: name || undefined });
-    refreshAuthProvider();
-    console.log(`[relay] Account added: ${account_id.slice(0, 8)}…`);
-    res.json({ ok: true });
+    const status = await refreshModels();
+    res.json({ ok: true, ...status });
   } catch (e) {
-    console.error('[relay] addAccount error:', e.message);
     res.status(500).json({ error: e.message });
   }
 });
 
-// ── Proxy contribution ──
-import { addProxies, listProxies, getProxyCount, reassignAllAccounts } from './proxyPool.js';
-
-app.post('/api/proxies/add', express.json(), (req, res) => {
-  const { proxies, url } = req.body || {};
-  const urls = proxies || (url ? [url] : []);
-  if (!urls.length) {
-    return res.status(400).json({ error: 'missing proxies array or url' });
+app.get('/api/accounts/health', async (req, res) => {
+  try {
+    const accounts = await checkAllAccountsHealth();
+    res.json({ accounts });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
-  // Validate format
-  const valid = urls.filter(u => /^https?:\/\/.+|socks[45]:\/\/.+/.test(u));
-  if (!valid.length) {
-    return res.status(400).json({ error: 'no valid proxy URLs (supported: http://, https://, socks4://, socks5://)' });
-  }
-  const added = addProxies(valid);
-  console.log(`[proxy] Added ${added.length} proxy(es), total: ${getProxyCount()}`);
-
-  // 新代理添加后，自动为直连账号分配代理
-  if (added.length) {
-    const auths = loadAccountsForProxy();
-    const accountIds = auths.map(a => a.accountId);
-    reassignAllAccounts(accountIds);
-  }
-
-  res.json({ ok: true, added: added.length, total: getProxyCount() });
-});
-
-app.get('/api/proxies', (req, res) => {
-  res.json({ proxies: listProxies(), total: getProxyCount() });
-});
-
-app.post('/api/proxies/reassign', (req, res) => {
-  const auths = loadAccountsForProxy();
-  const accountIds = auths.map(a => a.accountId);
-  reassignAllAccounts(accountIds);
-  res.json({ ok: true, assigned: accountIds.length, proxies: getProxyCount() });
 });
 
 app.post('/v1/chat/completions', async (req, res) => {
@@ -442,6 +418,16 @@ app.delete('/api/accounts/:index', (req, res) => {
   }
 });
 
+app.put('/api/accounts/:index/proxy', (req, res) => {
+  try {
+    updateAccountProxy(req.params.index, req.body.proxy);
+    refreshAuthProvider();
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get('/api/settings', (req, res) => {
   try {
     res.json(loadConfig());
@@ -452,14 +438,89 @@ app.get('/api/settings', (req, res) => {
 
 app.patch('/api/settings', (req, res) => {
   try {
-    const api_key = typeof req.body?.api_key === 'string' ? req.body.api_key : '';
     const current = loadConfig();
-    current.api_key = api_key;
+    const oldInterval = current.token_refresh_interval_minutes;
+    if (typeof req.body?.api_key === 'string') current.api_key = req.body.api_key;
+    if (req.body?.token_refresh_interval_minutes != null) {
+      const v = Math.max(5, Number(req.body.token_refresh_interval_minutes) || 60);
+      current.token_refresh_interval_minutes = v;
+    }
     saveConfig(current);
-    res.json({ ok: true, api_key: current.api_key });
+    // 间隔变化 → 重启定时器
+    if (current.token_refresh_interval_minutes !== oldInterval) {
+      startAutoRefresh(current.token_refresh_interval_minutes, refreshAuthProvider);
+    }
+    res.json({ ok: true, ...current });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// ── Token 手动刷新 / 状态 ──
+app.post('/api/accounts/refresh-tokens', async (req, res) => {
+  try {
+    const summary = await refreshAllAccounts();
+    // 刷新完成后重建认证闭包，新 token 立即生效
+    refreshAuthProvider();
+    res.json({ ok: true, summary });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/accounts/refresh-status', (req, res) => {
+  res.json(getAutoRefreshStatus());
+});
+
+// ── 一键自动注册 ──
+function parseAccessToken(accessToken) {
+  try {
+    const parts = accessToken.split('.');
+    if (parts.length >= 2) {
+      const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
+      const accountId = payload.sub || (payload['https://api.openai.com/profile'] && payload['https://api.openai.com/profile'].user_id) || 'unknown';
+      const email = payload.email || (payload['https://api.openai.com/profile'] && payload['https://api.openai.com/profile'].email) || null;
+      return { accountId, email };
+    }
+  } catch (_) {}
+  return { accountId: 'unknown', email: null };
+}
+
+app.post('/api/accounts/batch-import', async (req, res) => {
+  const { refreshTokens } = req.body || {};
+  if (!Array.isArray(refreshTokens) || refreshTokens.length === 0) {
+    return res.status(400).json({ error: '无效的 Refresh Token 列表' });
+  }
+  const results = [];
+  const entries = [];
+  for (const rt of refreshTokens) {
+    const tokenStr = String(rt).trim();
+    if (!tokenStr) continue;
+    try {
+      const tokens = await refreshAccessToken(tokenStr);
+      const { accountId, email } = parseAccessToken(tokens.access_token);
+      entries.push({
+        access_token: tokens.access_token,
+        account_id: accountId,
+        refresh_token: tokens.refresh_token || tokenStr,
+        name: email || undefined,
+        source: 'batch_import',
+      });
+      results.push({ token: tokenStr.slice(0, 15) + '...', status: 'success', accountId, email });
+    } catch (e) {
+      results.push({ token: tokenStr.slice(0, 15) + '...', status: 'error', error: e.message });
+    }
+  }
+  if (entries.length > 0) {
+    batchAddAccounts(entries);
+    refreshAuthProvider();
+  }
+  res.json({
+    ok: true,
+    total: refreshTokens.length,
+    imported: entries.length,
+    results,
+  });
 });
 
 // ── 图像生成 ──
@@ -502,7 +563,7 @@ app.get('/p/img/:token', async (req, res) => {
       return res.status(404).json({ error: '图片不存在或已过期' });
     }
     const imgBase64 = await fetchImageBytes(
-      cached.signedURL, cached.authToken, cached.accountId, cached.deviceId, cached.sessionId
+      cached.signedURL, cached.authToken, cached.accountId, cached.deviceId, cached.sessionId, cached.proxyUrl
     );
     const buf = Buffer.from(imgBase64, 'base64');
     res.setHeader('Content-Type', 'image/png');
@@ -526,6 +587,10 @@ function startServer() {
       console.warn('[WARN] 未配置账号，请访问配置页添加或设置 CODEX_AUTH_PATH:', e.message);
     }
   }
+  initialProbe();
+  // 启动 Token 自动刷新定时器，刷新完成后重建认证闭包使新 token 生效
+  const cfg = loadConfig();
+  startAutoRefresh(cfg.token_refresh_interval_minutes, refreshAuthProvider);
   const server = app.listen(PORT, '0.0.0.0', () => {
     const mockReq = { get: (h) => (h === 'host' ? `localhost:${PORT}` : undefined), secure: false };
     const oauthRedirect = getOAuthRedirectUri(mockReq);
@@ -535,13 +600,6 @@ function startServer() {
     console.log('   OAuth 回调（绑定 API 用）: ' + oauthRedirect + (process.env.PUBLIC_URL || process.env.OAUTH_REDIRECT_URI ? ' (已用 PUBLIC_URL/OAUTH_REDIRECT_URI)' : ' (若绑定时 403 请设置 PUBLIC_URL)'));
     console.log('   对话接口: http://localhost:' + PORT + '/v1/chat/completions');
     console.log('   建议模型: gpt-5.3-codex\n');
-
-    // 启动时自动分配账号到代理（每个代理 3 个账号）
-    const auths = loadAccountsForProxy();
-    if (auths.length && getProxyCount()) {
-      reassignAllAccounts(auths.map(a => a.accountId));
-      console.log(`[ProxyPool] Auto-assigned ${auths.length} accounts across ${getProxyCount()} proxies`);
-    }
   });
 
   setInterval(() => {

@@ -15,6 +15,7 @@ import { createHash, randomUUID } from 'crypto';
 
 import { updateImageQuota, recordImageUsage, getLocalImageQuota } from './usageTracker.js';
 import { markImageQuotaExhausted } from './accountStatus.js';
+import { getProxyAgent } from './proxyAgent.js';
 // ── 常量 ────────────────────────────────────────────────────
 
 const BASE_URL = 'https://chatgpt.com';
@@ -124,14 +125,15 @@ function solveProofToken(seed, difficulty) {
 
 async function apiFetch(url, method, opts) {
   const { authToken, accountId, deviceId, sessionId, body, extraHeaders,
-    accept, targetPath, timeoutMs = 30000 } = opts;
+    accept, targetPath, timeoutMs = 30000, proxyUrl } = opts;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const headers = makeHeaders(authToken, accountId, deviceId, sessionId, targetPath);
     headers['Accept'] = accept || '*/*';
     if (extraHeaders) Object.assign(headers, extraHeaders);
-    const init = { method, headers, signal: controller.signal };
+    const dispatcher = getProxyAgent(proxyUrl);
+    const init = { method, headers, signal: controller.signal, dispatcher };
     if (body) {
       init.body = typeof body === 'string' ? body : JSON.stringify(body);
       headers['Content-Type'] = 'application/json';
@@ -144,10 +146,10 @@ async function apiFetch(url, method, opts) {
 
 // ── API 步骤 ────────────────────────────────────────────────
 
-async function chatRequirements(authToken, accountId, deviceId, sessionId) {
+async function chatRequirements(authToken, accountId, deviceId, sessionId, proxyUrl) {
   const path = '/backend-api/sentinel/chat-requirements';
   const res = await apiFetch(BASE_URL + path, 'POST', {
-    authToken, accountId, deviceId, sessionId,
+    authToken, accountId, deviceId, sessionId, proxyUrl,
     body: { p: generateRequirementsToken() }, targetPath: path, timeoutMs: 20000,
   });
   if (!res.ok) {
@@ -158,7 +160,7 @@ async function chatRequirements(authToken, accountId, deviceId, sessionId) {
 }
 
 async function prepareFConversation(authToken, accountId, deviceId, sessionId,
-                                    prompt, model, chatToken, proofToken, convId, parentMsgId) {
+                                    prompt, model, chatToken, proofToken, convId, parentMsgId, proxyUrl) {
   const path = '/backend-api/f/conversation/prepare';
   const payload = {
     action: 'next', fork_from_shared_post: false,
@@ -182,7 +184,7 @@ async function prepareFConversation(authToken, accountId, deviceId, sessionId,
   if (proofToken) eh['Openai-Sentinel-Proof-Token'] = proofToken;
 
   const res = await apiFetch(BASE_URL + path, 'POST', {
-    authToken, accountId, deviceId, sessionId,
+    authToken, accountId, deviceId, sessionId, proxyUrl,
     body: payload, targetPath: path, extraHeaders: eh, timeoutMs: 25000,
   });
   if (!res.ok) {
@@ -194,7 +196,7 @@ async function prepareFConversation(authToken, accountId, deviceId, sessionId,
 }
 
 async function streamFConversation(authToken, accountId, deviceId, sessionId,
-                                    prompt, model, chatToken, proofToken, conduitToken, convId, parentMsgId) {
+                                    prompt, model, chatToken, proofToken, conduitToken, convId, parentMsgId, proxyUrl) {
   const path = '/backend-api/f/conversation';
   const msgId = randomUUID();
   const payload = {
@@ -237,7 +239,7 @@ async function streamFConversation(authToken, accountId, deviceId, sessionId,
   if (conduitToken) eh['Openai-Sentinel-Conduit-Token'] = conduitToken;
 
   const res = await apiFetch(BASE_URL + path, 'POST', {
-    authToken, accountId, deviceId, sessionId,
+    authToken, accountId, deviceId, sessionId, proxyUrl,
     body: payload, targetPath: path,
     extraHeaders: eh, accept: 'text/event-stream', timeoutMs: 180000,
   });
@@ -304,7 +306,7 @@ async function parseImageSSE(stream, debug = false) {
 
 // ── 轮询会话 ────────────────────────────────────────────────
 
-async function pollConversationForImages(authToken, accountId, deviceId, sessionId, convID, expectedN) {
+async function pollConversationForImages(authToken, accountId, deviceId, sessionId, convID, expectedN, proxyUrl) {
   const path = `/backend-api/conversation/${convID}`;
   const maxWait = 90000; // 最多等 90s
   const interval = 3000;  // 每 3s 轮询一次
@@ -317,7 +319,7 @@ async function pollConversationForImages(authToken, accountId, deviceId, session
 
   while (Date.now() < deadline) {
     const res = await apiFetch(BASE_URL + path, 'GET', {
-      authToken, accountId, deviceId, sessionId,
+      authToken, accountId, deviceId, sessionId, proxyUrl,
       targetPath: path, timeoutMs: 15000, accept: 'application/json',
     });
     if (!res.ok) {
@@ -384,7 +386,7 @@ async function pollConversationForImages(authToken, accountId, deviceId, session
 
 // ── 图像下载 ────────────────────────────────────────────────
 
-async function getImageDownloadURL(authToken, accountId, deviceId, sessionId, convID, fileRef) {
+async function getImageDownloadURL(authToken, accountId, deviceId, sessionId, convID, fileRef, proxyUrl) {
   let url;
   if (fileRef.startsWith('sed:')) {
     const fid = fileRef.slice(4);
@@ -395,7 +397,7 @@ async function getImageDownloadURL(authToken, accountId, deviceId, sessionId, co
   }
   const path = new URL(url).pathname;
   const res = await apiFetch(url, 'GET', {
-    authToken, accountId, deviceId, sessionId, targetPath: path, timeoutMs: 20000,
+    authToken, accountId, deviceId, sessionId, proxyUrl, targetPath: path, timeoutMs: 20000,
   });
   if (!res.ok) {
     const t = await res.text().catch(() => '');
@@ -405,10 +407,8 @@ async function getImageDownloadURL(authToken, accountId, deviceId, sessionId, co
   return d.download_url || d.url || '';
 }
 
-export async function fetchImageBytes(url, authToken, accountId, deviceId, sessionId) {
-  // 代理分发器缓存
-
-// chatgpt.com 开头的 estuary/attachment 回源 URL 必须带认证头，否则 403
+export async function fetchImageBytes(url, authToken, accountId, deviceId, sessionId, proxyUrl = null) {
+  // chatgpt.com 开头的 estuary/attachment 回源 URL 必须带认证头，否则 403
   const needAuth = url.startsWith(BASE_URL + '/');
   const headers = needAuth
     ? makeHeaders(authToken, accountId, deviceId, sessionId, '')
@@ -418,8 +418,9 @@ export async function fetchImageBytes(url, authToken, accountId, deviceId, sessi
     headers['Referer'] = 'https://chatgpt.com/';
     headers['Origin'] = 'https://chatgpt.com';
   }
-  const init = { headers };
-const res = await fetch(url, init);
+  const dispatcher = getProxyAgent(proxyUrl);
+  const init = { headers, dispatcher };
+  const res = await fetch(url, init);
   if (!res.ok) throw new Error(`fetch image ${res.status}`);
   const buf = await res.arrayBuffer();
   return Buffer.from(buf).toString('base64');
@@ -431,9 +432,9 @@ const res = await fetch(url, init);
 const imageCache = new Map();
 const CACHE_TTL = 30 * 60 * 1000; // 30 分钟 TTL
 
-export function storeImage(token, signedURL, authToken, accountId, deviceId, sessionId) {
+export function storeImage(token, signedURL, authToken, accountId, deviceId, sessionId, proxyUrl = null) {
   imageCache.set(token, {
-    signedURL, authToken, accountId, deviceId, sessionId,
+    signedURL, authToken, accountId, deviceId, sessionId, proxyUrl,
     expires: Date.now() + CACHE_TTL,
   });
   // 定期清理过期条目 (超过 200 条时触发)
@@ -459,6 +460,7 @@ export async function generateImage(openaiReq, auth) {
   const n = Math.min(Math.max(Number(openaiReq.n) || 1, 1), 10);
   const authToken = auth.accessToken;
   const accountId = auth.accountId;
+  const proxyUrl = auth.proxyUrl || null;
   // 从 JWT 中解析 session_id（jwt.io 格式：header.payload.signature）
   let sessionId = auth.sessionId || '';
   if (!sessionId && authToken) {
@@ -472,7 +474,7 @@ export async function generateImage(openaiReq, auth) {
   }
   const deviceId = auth.deviceId || accountId;
 
-  const cr = await chatRequirements(authToken, accountId, deviceId, sessionId);
+  const cr = await chatRequirements(authToken, accountId, deviceId, sessionId, proxyUrl);
 
   // 检测并更新生图额度
   const limits = cr.limits_progress || [];
@@ -490,11 +492,11 @@ export async function generateImage(openaiReq, auth) {
   const parentMsgId = randomUUID();
   const conduitToken = await prepareFConversation(
     authToken, accountId, deviceId, sessionId,
-    prompt, upstreamModel, chatToken, proofToken, '', parentMsgId);
+    prompt, upstreamModel, chatToken, proofToken, '', parentMsgId, proxyUrl);
 
   const sseStream = await streamFConversation(
     authToken, accountId, deviceId, sessionId,
-    prompt, upstreamModel, chatToken, proofToken, conduitToken, '', parentMsgId);
+    prompt, upstreamModel, chatToken, proofToken, conduitToken, '', parentMsgId, proxyUrl);
 
   const sse = await parseImageSSE(sseStream, true);
   
@@ -504,7 +506,7 @@ export async function generateImage(openaiReq, auth) {
   let sedIDs = [...sse.sedimentIDs];
   let pollResult = null;
   if (fileIDs.length === 0 && sse.conversationID) {
-    pollResult = await pollConversationForImages(authToken, accountId, deviceId, sessionId, sse.conversationID, n);
+    pollResult = await pollConversationForImages(authToken, accountId, deviceId, sessionId, sse.conversationID, n, proxyUrl);
     fileIDs = pollResult.fileIDs;
     sedIDs = pollResult.sedimentIDs;
   }
@@ -523,11 +525,11 @@ export async function generateImage(openaiReq, auth) {
   const data = [];
   for (const ref of targets) {
     try {
-      const dlURL = await getImageDownloadURL(authToken, accountId, deviceId, sessionId, sse.conversationID, ref);
+      const dlURL = await getImageDownloadURL(authToken, accountId, deviceId, sessionId, sse.conversationID, ref, proxyUrl);
       if (dlURL) {
         // 生成代理 token，存储签名 URL（带认证信息）
         const token = randomUUID().replace(/-/g, '');
-        storeImage(token, dlURL, authToken, accountId, deviceId, sessionId);
+        storeImage(token, dlURL, authToken, accountId, deviceId, sessionId, proxyUrl);
         data.push({ url: `${BASE_URL}/backend-api/codex/fake-placeholder` });
         // 改为用本地代理 URL——需要在外部设置 base
         data[data.length - 1]._token = token;

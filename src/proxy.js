@@ -3,7 +3,7 @@ import { loadAuth } from './auth.js';
 import { markAccountUnavailable } from './accountStatus.js';
 import { recordUsage, clearUsage } from './usageTracker.js';
 import { refreshTokenByAccountId, isTokenExpiringSoon } from './tokenRefresh.js';
-import { getProxyForAccount, createProxyAgent, fetchWithProxy } from './proxyPool.js';
+import { getProxyAgent } from './proxyAgent.js';
 
 const BACKEND_URL = 'https://chatgpt.com/backend-api/codex/responses';
 
@@ -23,7 +23,7 @@ const BROWSER_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
 };
 
-async function getMessageContentParts(msg) {
+async function getMessageContentParts(msg, proxyUrl) {
   const content = [];
   const raw = msg.content;
   if (typeof raw === 'string') {
@@ -43,7 +43,8 @@ async function getMessageContentParts(msg) {
         // 外部 URL 下载转 base64（Codex 不支持外部 HTTP URL）
         if (url.startsWith('http://') || url.startsWith('https://')) {
           try {
-            const imgRes = await fetch(url, { signal: AbortSignal.timeout(15000) });
+            const dispatcher = getProxyAgent(proxyUrl);
+            const imgRes = await fetch(url, { signal: AbortSignal.timeout(15000), dispatcher });
             if (imgRes.ok) {
               const buf = Buffer.from(await imgRes.arrayBuffer());
               const mime = imgRes.headers.get('content-type') || 'image/jpeg';
@@ -64,14 +65,14 @@ async function getMessageContentParts(msg) {
   return content;
 }
 
-async function messagesToInput(messages) {
+async function messagesToInput(messages, proxyUrl) {
   const parts = [];
   let hasImage = false;
   const textLines = [];
 
   for (const msg of messages) {
     const role = String(msg.role || 'user').toLowerCase();
-    const contentParts = await getMessageContentParts(msg);
+    const contentParts = await getMessageContentParts(msg, proxyUrl);
     if (contentParts.length === 0) continue;
 
     const texts = contentParts.filter((p) => p.type === 'text').map((p) => p.text);
@@ -142,7 +143,7 @@ function normalizeTools(tools) {
   });
 }
 
-async function buildResponsesRequest(openaiReq) {
+async function buildResponsesRequest(openaiReq, proxyUrl) {
   const tools = normalizeTools(openaiReq.tools || []);
   const rawToolChoice = openaiReq.tool_choice;
   let tool_choice;
@@ -158,7 +159,7 @@ async function buildResponsesRequest(openaiReq) {
   return {
     model: openaiReq.model || 'gpt-5.3-codex',
     instructions: 'You are a helpful AI assistant. Provide clear, accurate, and concise responses.',
-    input: await messagesToInput(openaiReq.messages || []),
+    input: await messagesToInput(openaiReq.messages || [], proxyUrl),
     tools,
     tool_choice,
     parallel_tool_calls: false,
@@ -299,12 +300,11 @@ export async function callCodexBackend(openaiReq, authProvider = null) {
     }
   }
 
-  const body = await buildResponsesRequest(openaiReq);
+  const body = await buildResponsesRequest(openaiReq, auth.proxyUrl);
   const sessionId = randomUUID();
+  const dispatcher = getProxyAgent(auth.proxyUrl);
 
   // ── 第一次请求 ──
-  const proxyUrl = getProxyForAccount(auth.accountId);
-  if (proxyUrl) console.log(`[Proxy] Account ${auth.accountId?.slice(0, 8)}… using proxy`);
   let headers = {
     ...BROWSER_HEADERS,
     'Content-Type': 'application/json',
@@ -312,11 +312,12 @@ export async function callCodexBackend(openaiReq, authProvider = null) {
     'chatgpt-account-id': auth.accountId,
     'session_id': sessionId,
   };
-  let res = await fetchWithProxy(BACKEND_URL, {
+  let res = await fetch(BACKEND_URL, {
     method: 'POST',
     headers,
     body: JSON.stringify(body),
-  }, proxyUrl);
+    dispatcher,
+  });
 
   // ── 401/403 → 刷新 token 重试一次 ──
   if ((res.status === 401 || res.status === 403) && auth.accountId) {
@@ -330,11 +331,12 @@ export async function callCodexBackend(openaiReq, authProvider = null) {
         'chatgpt-account-id': auth.accountId,
         'session_id': randomUUID(),
       };
-      res = await fetchWithProxy(BACKEND_URL, {
+      res = await fetch(BACKEND_URL, {
         method: 'POST',
         headers,
         body: JSON.stringify(body),
-      }, proxyUrl);
+        dispatcher,
+      });
       // 更新 auth 对象供后续调用使用
       auth.accessToken = refreshed.accessToken;
     }
