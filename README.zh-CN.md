@@ -1,6 +1,6 @@
 # Codex Pro API
 
-将 Codex（gpt-5.5、gpt-5.4、gpt-5.4-mini、gpt-5.3-codex、gpt-image-2 等）以 OpenAI 兼容 API 形式暴露，可在 Cline、Cursor 等支持 OpenAI 接口的客户端中使用。支持文本对话（/v1/chat/completions）和图像生成（/v1/images/generations）。
+将账号可用的 Codex 模型动态获取并以 OpenAI 兼容 API 形式暴露，可在 Cline、Cursor 等支持 OpenAI 接口的客户端中使用。支持文本对话（/v1/chat/completions）和图像生成（/v1/images/generations）。
 
 英文说明请参阅 README.md。
 
@@ -76,12 +76,12 @@ npm run dist:win
 | 配置项 | 填写内容 |
 |--------|----------|
 | Base URL | http://localhost:1455/v1（必须包含 /v1；若使用自定义主机或端口，请改为对应地址 + /v1） |
-| 模型 | gpt-5.4 或 gpt-5.5（完整支持：gpt-5.5、gpt-5.4、gpt-5.4-mini、gpt-5.3-codex、gpt-5.2-codex、gpt-5-codex、gpt-5、gpt-image-2、gpt-4） |
+| 模型 | 使用 `GET /v1/models` 返回的模型；可在系统设置选择默认模型，也可在每次请求中传入模型 ID |
 | API Key | 任意填写（不进行强校验，认证基于您配置的 Codex 账号） |
 
 ### 操作步骤：
 
-1. 在 http://localhost:1455/ 的“账号”页点击“使用 Codex 登录”、手动粘贴 auth.json 或通过“批量导入”添加账号。
+1. 在 http://localhost:1455/ 的“账号”页选择网页登录、手动粘贴 auth.json、批量导入，或点击“导入本机 Codex”。使用本机导入前，先在运行 Codex Pro API 的设备上执行 `codex login`。
 2. 如需为账号绑定专用代理，点击账号列表中“代理”列的“修改”按钮，输入代理 URL（如 http://127.0.0.1:7890）。
 3. 在客户端中按照上表设置 Base URL 和模型，API Key 随意填写。
 4. 发起对话即可，代理会自动处理轮询、异常重试以及 Token 刷新。

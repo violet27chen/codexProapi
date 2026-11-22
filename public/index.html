@@ -54,7 +54,7 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
           请求日志
         </div>
-        <div class="nav-item" :class="page==='settings'&&'active'" @click="page='settings'; loadSettings()">
+        <div class="nav-item" :class="page==='settings'&&'active'" @click="page='settings'; loadSettings(); loadModels()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
           系统设置
         </div>
@@ -79,6 +79,10 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
             <button type="button" class="btn" @click="checkAccountsHealth()" :class="{'btn-loading':loading.health}">
               <svg x-show="loading.health" class="spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.22-8.56"/></svg>
               健康检查
+            </button>
+            <button type="button" class="btn" @click="importLocalCodex()" :disabled="loading.localCodex" :class="{'btn-loading':loading.localCodex}">
+              <svg x-show="loading.localCodex" class="spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.22-8.56"/></svg>
+              导入本机 Codex
             </button>
             <button type="button" class="btn" @click="showBatchImport=true; batchImportText=''; batchImportResults=null">批量导入</button>
             <button type="button" class="btn btn-primary" @click="showAdd=true; resetAddForm()">+ 添加账号</button>
@@ -224,12 +228,13 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
       <!-- ════ MODELS ════ -->
       <div class="content" x-show="page==='models'" x-cloak>
         <p class="text-muted text-sm" style="margin-bottom:12px" x-show="modelsLastProbed>0" x-text="'上次探测：' + fmtTime(new Date(modelsLastProbed).toISOString())"></p>
+        <p class="text-muted text-sm" style="margin-bottom:12px" x-show="modelsCatalogError" x-text="'模型目录获取失败：' + modelsCatalogError"></p>
         <div class="card">
           <div class="table-wrap">
             <table>
               <thead><tr><th>模型 ID</th><th>状态</th><th>延迟</th><th>原因</th></tr></thead>
               <tbody>
-                <tr x-show="models.length===0"><td colspan="4" class="empty">点击“刷新探测”获取模型状态</td></tr>
+                <tr x-show="models.length===0"><td colspan="4" class="empty">模型目录会从上游动态获取；点击“刷新探测”重试</td></tr>
                 <template x-for="(m, idx) in models" :key="idx">
                   <tr>
                     <td class="mono" x-text="m.id"></td>
@@ -314,6 +319,25 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
               <button type="button" class="btn" @click="showKey=!showKey" x-text="showKey?'隐藏':'显示'"></button>
             </div>
           </div>
+        </div>
+
+        <div class="card" style="max-width:560px">
+          <div class="card-title">默认对话模型</div>
+          <div class="form-row">
+            <label class="form-label">未在请求中指定模型时使用</label>
+            <div class="input-row">
+              <select x-model="cfg.default_model">
+                <option value="">自动选择首个可用模型</option>
+                <option x-show="cfg.default_model && !selectableModels.some(m => m.id === cfg.default_model)"
+                  :value="cfg.default_model" x-text="cfg.default_model + '（当前目录中未发现）'"></option>
+                <template x-for="m in selectableModels" :key="m.id">
+                  <option :value="m.id" x-text="m.id"></option>
+                </template>
+              </select>
+              <button type="button" class="btn" @click="doRefreshModels()" :disabled="loading.models">刷新模型列表</button>
+            </div>
+          </div>
+          <p class="text-muted text-sm">模型目录由 Codex 账号动态提供。选择模型后，客户端请求未填写 model 时将使用此默认值。</p>
         </div>
 
 

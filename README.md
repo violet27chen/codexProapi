@@ -1,6 +1,6 @@
 # Codex Pro API
 
-Exposes Codex (gpt-5.5, gpt-5.4, gpt-5.4-mini, gpt-5.3-codex, gpt-image-2, and more) as an OpenAI-compatible API so you can use it in Cline, Cursor, or any client that supports OpenAI-style endpoints. Supports text chat (/v1/chat/completions) and image generation (/v1/images/generations).
+Exposes Codex models discovered dynamically from your account as an OpenAI-compatible API so you can use it in Cline, Cursor, or any client that supports OpenAI-style endpoints. Supports text chat (/v1/chat/completions) and image generation (/v1/images/generations).
 
 For Chinese documentation, please see README.zh-CN.md.
 
@@ -70,12 +70,12 @@ Configure your client using the following settings:
 | Setting | Value |
 |---------|-------|
 | Base URL | http://localhost:1455/v1 (must include /v1; or your custom host/port + /v1) |
-| Model | gpt-5.4, gpt-5.5, or any other supported model (gpt-5.5, gpt-5.4, gpt-5.4-mini, gpt-5.3-codex, gpt-5.2-codex, gpt-5-codex, gpt-5, gpt-image-2, gpt-4) |
+| Model | Any model returned by `GET /v1/models`; choose a default in System Settings or pass a model ID in each request |
 | API Key | Any value (not validated; authentication is derived from your configured accounts) |
 
 ### Steps:
 
-1. Add accounts at http://localhost:1455/ on the Accounts page via OAuth login, manual JSON input, or Batch Import.
+1. Add accounts at http://localhost:1455/ on the Accounts page via OAuth login, manual JSON input, Batch Import, or **Import Local Codex**. For local import, first run `codex login` on the machine running Codex Pro API.
 2. If needed, click Modify next to the account in the proxy column to bind a dedicated proxy (e.g. http://127.0.0.1:7890).
 3. In your client (Cline, Cursor, etc.), specify the Base URL and model names as described above. Set the API Key to any string.
 4. Send requests normally. The proxy handles routing, rotation, and auto-refresh behind the scenes.
