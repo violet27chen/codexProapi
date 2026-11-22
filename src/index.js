@@ -32,7 +32,6 @@ import { generateImage, getCachedImage, fetchImageBytes } from './imagegen.js';
 import {
   getAvailableModelsOpenAI,
   getDefaultChatModel,
-  getDefaultImageModel,
   getModelsStatus,
   invalidateModels,
   refreshModels,
@@ -695,15 +694,9 @@ app.post('/v1/images/generations', async (req, res) => {
       return res.status(503).json({ error: { message: '所有账号不可用' } });
     }
     const imageRequest = { ...req.body };
-    if (!imageRequest.model) {
-      const defaultImageModel = getDefaultImageModel();
-      if (!defaultImageModel) {
-        return res.status(503).json({
-          error: { message: '当前账号模型目录中没有可用图片模型，请先刷新模型目录或指定图片模型 ID' },
-        });
-      }
-      imageRequest.model = defaultImageModel;
-    }
+    // Codex 后端自动用 gpt-image-2，不需要指定独立 image 模型
+    // 如果客户端没指定 model，就透传给后端让它决定
+    if (!imageRequest.model) delete imageRequest.model;
     const result = await generateImage(imageRequest, auth);
     // 将 _token 替换为本地代理 URL
     const host = req.get('host') || `localhost:${PORT}`;

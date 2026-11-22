@@ -361,13 +361,6 @@ export function getDefaultChatModel() {
   return cache.inProgress || cache.lastProbed === 0 ? modelIds[0] || '' : '';
 }
 
-export function getDefaultImageModel() {
-  maybeProbeInBackground();
-  return modelIds.find((id) => /(?:^|[._-])(?:image|dall-e)(?:[._-]|$)/i.test(id))
-    || modelIds.find((id) => /image/i.test(id))
-    || '';
-}
-
 /**
  * 获取完整的探测状态（用于前端 /api/models 详细页）
  */
@@ -375,7 +368,7 @@ export function getModelsStatus() {
   maybeProbeInBackground();
   const models = modelIds.map((id) => ({
     id,
-    type: /image/i.test(id) ? 'image' : 'text',
+    type: 'text',
     ...(cache.results[id] || { available: null, latency: null, reason: 'not_probed' }),
   }));
   return {
