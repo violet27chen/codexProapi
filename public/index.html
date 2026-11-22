@@ -278,9 +278,9 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
         <div class="card">
           <div class="table-wrap">
             <table>
-              <thead><tr><th>模型 ID</th><th>状态</th><th>延迟</th><th>原因</th></tr></thead>
+              <thead><tr><th>模型 ID</th><th>状态</th><th>探测通过 / 已探测账号</th><th>延迟</th><th>原因</th></tr></thead>
               <tbody>
-                <tr x-show="models.length===0"><td colspan="4" class="empty">模型目录会从上游动态获取；点击“刷新探测”重试</td></tr>
+                <tr x-show="models.length===0"><td colspan="5" class="empty">模型目录会从上游动态获取；点击“刷新探测”重试</td></tr>
                 <template x-for="(m, idx) in models" :key="idx">
                   <tr>
                     <td class="mono" x-text="m.id"></td>
@@ -289,6 +289,7 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
                         :class="modelStatusClass(m)"
                         x-text="modelStatusLabel(m)"></span>
                     </td>
+                    <td class="text-muted" x-text="m.availableAccountCount != null ? m.availableAccountCount + ' / ' + m.accountCount : '—'"></td>
                     <td class="text-muted" x-text="m.latency!=null ? m.latency+'ms' : '—'"></td>
                     <td class="text-muted text-xs" x-text="modelReasonLabel(m.reason, m)"></td>
                   </tr>

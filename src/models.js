@@ -43,6 +43,29 @@ let cache = {
 let modelIds = [];
 let catalogError = null;
 let probePromise = null; // 单飞：并发调用复用同一 promise
+let probeGeneration = 0;
+
+function clearModelCache() {
+  cache.lastProbed = 0;
+  cache.results = {};
+  modelIds = [];
+  catalogError = null;
+}
+
+export function invalidateModels() {
+  probeGeneration++;
+  clearModelCache();
+  const pendingProbe = probePromise;
+  if (pendingProbe) {
+    void pendingProbe.finally(() => {
+      if (cache.lastProbed === 0 && !probePromise) {
+        probeAll().catch((e) => console.error('[models] 失效后探测失败:', e.message));
+      }
+    }).catch((e) => console.error('[models] 已失效的探测失败:', e.message));
+    return;
+  }
+  probeAll().catch((e) => console.error('[models] 失效后探测失败:', e.message));
+}
 
 /**
  * 选一个当前可用的账号用于探测
@@ -213,11 +236,13 @@ async function probeModel(modelId, auth) {
  */
 function probeAll() {
   if (probePromise) return probePromise;
+  const generation = probeGeneration;
   probePromise = (async () => {
     const auths = loadAccountsForProxy().filter(
       (a) => a.type === 'codex' && a.accessToken && a.accountId
     );
     if (auths.length === 0) {
+      if (generation !== probeGeneration) return;
       cache.lastProbed = Date.now();
       cache.results = {};
       modelIds = [];
@@ -231,6 +256,7 @@ function probeAll() {
       const discoveredIds = new Set();
       catalogError = null;
       for (const candidate of auths) {
+        if (generation !== probeGeneration) return;
         if (isAccountUnavailable(candidate.accountId)) continue;
         const probeAuth = { ...candidate };
         try {
@@ -244,11 +270,14 @@ function probeAll() {
           }
         }
       }
+      if (generation !== probeGeneration) return;
       modelIds = [...discoveredIds];
 
       for (const modelId of modelIds) {
+        if (generation !== probeGeneration) return;
         const accountResults = [];
         for (const candidate of auths) {
+          if (generation !== probeGeneration) return;
           if (isAccountUnavailable(candidate.accountId)) continue;
           const ids = catalogByAccount.get(candidate.accountId);
           if (!ids?.includes(modelId)) continue;
@@ -271,12 +300,15 @@ function probeAll() {
           : accountResults[0];
         newResults[modelId] = {
           available,
+          availableAccountCount: availableResults.length,
+          accountCount: accountResults.length,
           latency: result?.latency ?? 0,
           reason: available ? null : (result?.reason || 'no_healthy_account'),
           accountResults,
           probedAt: Date.now(),
         };
       }
+      if (generation !== probeGeneration) return;
       cache.results = newResults;
       cache.lastProbed = Date.now();
     } finally {
@@ -290,7 +322,10 @@ function probeAll() {
  * 强制重新探测（清除缓存并 await 完成）
  */
 export async function refreshModels() {
-  cache.lastProbed = 0;
+  probeGeneration++;
+  clearModelCache();
+  const pendingProbe = probePromise;
+  if (pendingProbe) await pendingProbe;
   await probeAll();
   return getModelsStatus();
 }

@@ -34,6 +34,7 @@ import {
   getDefaultChatModel,
   getDefaultImageModel,
   getModelsStatus,
+  invalidateModels,
   refreshModels,
   initialProbe,
   checkAllAccountsHealth,
@@ -563,6 +564,7 @@ app.put('/api/accounts/:index/blocked', (req, res) => {
   try {
     const result = setAccountBlocked(req.params.index, req.body?.blocked);
     refreshAuthProvider();
+    invalidateModels();
     res.json(result);
   } catch (e) {
     res.status(400).json({ error: e.message });
