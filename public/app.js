@@ -113,16 +113,28 @@ ${auth}  -d '${JSON.stringify(body)}'`;
 ${auth}  -d '${JSON.stringify(body)}'`;
         },
         highlightShellCommand(command) {
-            const escaped = String(command)
+            return String(command).split('\n').map((line) => {
+                const escaped = line
                 .replace(/&/g, '&amp;')
                 .replace(/</g, '&lt;')
                 .replace(/>/g, '&gt;');
-            return escaped
-                .replace(/\bcurl\b/g, '<span class="shell-command">curl</span>')
-                .replace(/(https?:\/\/[^\s\\]+)/g, '<span class="shell-url">$1</span>')
-                .replace(/(-H)(?=\s)/g, '<span class="shell-option">$1</span>')
-                .replace(/(-d)(?=\s)/g, '<span class="shell-option">$1</span>')
-                .replace(/('[^']*')/g, '<span class="shell-json">$1</span>');
+                if (/^\s*curl\b/.test(line)) {
+                    return escaped
+                        .replace(/\bcurl\b/, '<span class="shell-command">curl</span>')
+                        .replace(/(https?:\/\/[^\s\\]+)/, '<span class="shell-url">$1</span>');
+                }
+                if (/^\s*-H\b/.test(line)) {
+                    return escaped
+                        .replace(/(^\s*)-H/, '$1<span class="shell-option">-H</span>')
+                        .replace(/("[^"]*")/, '<span class="shell-json">$1</span>');
+                }
+                if (/^\s*-d\b/.test(line)) {
+                    return escaped
+                        .replace(/(^\s*)-d/, '$1<span class="shell-option">-d</span>')
+                        .replace(/('[^']*')/, '<span class="shell-json">$1</span>');
+                }
+                return escaped;
+            }).join('\n');
         },
 
         /* ── init ── */
