@@ -26,10 +26,7 @@ function app() {
         batchImportText: '',
         batchImportResults: null,
         lf: 'all',
-        showBindProxy: false,
-        proxyEditIndex: null,
-        proxyEditUrl: '',
-        loading: { usage: false, logs: false, models: false, health: false, addAcc: false, localCodex: false, localCodexLogin: false, settings: false, refreshTokens: false, batchImport: false, bindProxy: false },
+        loading: { usage: false, logs: false, models: false, health: false, addAcc: false, localCodex: false, localCodexLogin: false, settings: false, refreshTokens: false, batchImport: false },
         toast: null,
         _tt: null,
         endpoints: [
@@ -371,35 +368,6 @@ ${auth}  -d '${JSON.stringify(body)}'`;
                 d.ok ? (this.toast2('账号已删除', 'success'), await this.loadAccounts()) : this.toast2('删除失败', 'error');
             } catch { this.toast2('删除失败', 'error'); }
         },
-        editProxy(idx, currentProxy) {
-            this.proxyEditIndex = idx;
-            this.proxyEditUrl = currentProxy || '';
-            this.showBindProxy = true;
-        },
-        async submitBindProxy() {
-            if (this.proxyEditIndex === null) return;
-            this.loading.bindProxy = true;
-            try {
-                const r = await fetch(`/api/accounts/${this.proxyEditIndex}/proxy`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ proxy: this.proxyEditUrl }),
-                });
-                const d = await r.json();
-                if (r.ok && d.ok) {
-                    this.toast2('代理绑定成功', 'success');
-                    this.showBindProxy = false;
-                    await this.loadAccounts();
-                } else {
-                    this.toast2('修改失败：' + (d.error || '未知'), 'error');
-                }
-            } catch (e) {
-                this.toast2('修改失败：' + e.message, 'error');
-            } finally {
-                this.loading.bindProxy = false;
-            }
-        },
-
         /* ── token refresh ── */
         async loadRefreshStatus() {
             try {

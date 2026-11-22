@@ -237,10 +237,7 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
                     </td>
                     <td class="mono text-xs text-muted" x-text="acc.source||'—'"></td>
                     <td class="mono text-xs">
-                      <div class="flex items-center gap-2">
-                        <span x-text="acc.proxyDisplay || '—'" :class="acc.proxyDisplay ? 'text-muted' : 'text-dim'"></span>
-                        <button type="button" class="btn btn-sm" style="padding: 2px 6px; font-size: 11px;" @click="editProxy(acc.index, acc.proxy)">修改</button>
-                      </div>
+                      <span x-text="acc.proxyDisplay || '—'" :class="acc.proxyDisplay ? 'text-muted' : 'text-dim'"></span>
                     </td>
                     <td class="mono text-xs" x-text="acc.tokenExp ? fmtTime(acc.tokenExp, true) : '—'"></td>
                     <td>
@@ -504,29 +501,6 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
         <button type="button" class="btn btn-primary" @click="submitBatchImport()" :class="{'btn-loading':loading.batchImport}">
           <svg x-show="loading.batchImport" class="spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.22-8.56"/></svg>
           开始导入
-        </button>
-      </div>
-    </div>
-  </div>
-  <!-- ── BIND PROXY MODAL ── -->
-  <div class="overlay" x-show="showBindProxy" x-cloak @keydown.escape.window="showBindProxy=false">
-    <div class="modal" @click.stop style="max-width:420px">
-      <div class="modal-header">
-        <span class="modal-title" x-text="'绑定代理 - ' + getAccName(proxyEditIndex)"></span>
-        <button type="button" class="modal-close" @click="showBindProxy=false">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </button>
-      </div>
-      <div class="form-row">
-        <label class="form-label">代理 URL</label>
-        <input type="text" class="mono" x-model="proxyEditUrl" placeholder="例如：http://127.0.0.1:7890">
-        <p class="text-dim text-xs mt-1">留空表示直连。支持 http、https、socks 代理。</p>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn" @click="showBindProxy=false">取消</button>
-        <button type="button" class="btn btn-primary" @click="submitBindProxy()" :class="{'btn-loading':loading.bindProxy}">
-          <svg x-show="loading.bindProxy" class="spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.22-8.56"/></svg>
-          确定
         </button>
       </div>
     </div>
