@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseModelCatalog } from '../src/modelCatalog.js';
+import { hasModelProbeOutput } from '../src/models.js';
 import {
   normalizeClaudeMessagesRequest,
   normalizeOpenAIResponsesRequest,
@@ -24,6 +25,20 @@ test('parseModelCatalog returns unique visible model IDs', () => {
 
 test('parseModelCatalog rejects an invalid catalog response', () => {
   assert.throws(() => parseModelCatalog({}), /缺少 models 数组/);
+});
+
+test('model probe requires actual output text, not just HTTP success', async () => {
+  const encoder = new TextEncoder();
+  const stream = (events) => new ReadableStream({
+    start(controller) {
+      for (const event of events) controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+      controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+      controller.close();
+    },
+  });
+
+  assert.equal(await hasModelProbeOutput(stream([{ type: 'response.completed', response: { output: [] } }])), false);
+  assert.equal(await hasModelProbeOutput(stream([{ type: 'response.output_text.delta', delta: 'ok' }])), true);
 });
 
 test('normalizeClaudeMessagesRequest converts Claude text, system, and image blocks', () => {

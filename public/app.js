@@ -512,6 +512,7 @@ ${auth}  -d '${JSON.stringify(body)}'`;
             if (model && this.modelQuotaIsEmpty(model.id)) return '模型额度已用尽';
             const labels = {
                 model_not_found: '模型不存在或不支持',
+                model_empty_response: '模型无返回内容',
                 auth_failed: '认证失败',
                 token_invalidated: 'Token 已失效',
                 timeout: '探测超时',

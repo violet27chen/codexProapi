@@ -111,6 +111,47 @@ async function fetchModelCatalog(auth) {
   return parseModelCatalog(payload);
 }
 
+export async function hasModelProbeOutput(stream) {
+  if (!stream) return false;
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let hasText = false;
+  const inspectLine = (line) => {
+    if (!line.startsWith('data: ') || line.slice(6) === '[DONE]') return;
+    try {
+      const event = JSON.parse(line.slice(6));
+      if (event.type === 'response.output_text.delta' && String(event.delta || '').trim()) {
+        hasText = true;
+      } else if (event.type === 'response.output_text.done' && String(event.text || '').trim()) {
+        hasText = true;
+      } else if (event.type === 'response.completed') {
+        const outputText = (event.response?.output || [])
+          .flatMap((item) => item.content || [])
+          .filter((part) => part.type === 'output_text')
+          .map((part) => part.text || '')
+          .join('');
+        if (outputText.trim()) hasText = true;
+      }
+    } catch {}
+  };
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      for (const line of lines) inspectLine(line.trimEnd());
+    }
+    if (buffer) inspectLine(buffer.trimEnd());
+  } finally {
+    reader.releaseLock();
+  }
+  return hasText;
+}
+
 /**
  * 探测单个模型 — 发送最小请求体，401/403 时刷新 token 重试一次
  */
@@ -133,13 +174,15 @@ async function probeModel(modelId, auth) {
       } catch (_) {}
     }
 
-    const latency = Date.now() - start;
-
     if (res.status === 200) {
-      try { res.body?.cancel?.(); } catch {}
-      return { available: true, latency };
+      const hasOutput = await hasModelProbeOutput(res.body);
+      const latency = Date.now() - start;
+      return hasOutput
+        ? { available: true, latency }
+        : { available: false, latency, reason: 'model_empty_response' };
     }
 
+    const latency = Date.now() - start;
     const text = await res.text().catch(() => '');
 
     if (res.status === 401 || res.status === 403) {
