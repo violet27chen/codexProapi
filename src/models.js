@@ -14,6 +14,16 @@ import { parseModelCatalog } from './modelCatalog.js';
 const BACKEND_URL = 'https://chatgpt.com/backend-api/codex/responses';
 const MODELS_URL = 'https://chatgpt.com/backend-api/codex/models?client_version=1.0.0';
 
+// 图片生成模型（使用 conversation API，不通过 codex/responses 探测，有账号则可用）
+const IMAGE_MODELS = [
+  'gpt-image-2',
+  'gpt-image-1',
+];
+
+function isImageModel(id) {
+  return /image|dall-e/i.test(id);
+}
+
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 小时
 const PROBE_TIMEOUT_MS = 12 * 1000;
 
@@ -269,8 +279,14 @@ function maybeProbeInBackground() {
  */
 export function getAvailableModelsOpenAI() {
   maybeProbeInBackground();
-  const availableIds = modelIds.filter((id) => !cache.results[id] || cache.results[id].available);
-  return availableIds.map((id) => ({
+  const textIds = modelIds.filter((id) => !isImageModel(id) && (!cache.results[id] || cache.results[id].available));
+  const hasAccount = loadAccountsForProxy().some(
+    (a) => a.type === 'codex' && a.accessToken && !isAccountUnavailable(a.accountId)
+  );
+  const catalogImageIds = modelIds.filter(isImageModel);
+  const imageIds = [...new Set([...catalogImageIds, ...IMAGE_MODELS])];
+  const allIds = hasAccount ? [...textIds, ...imageIds] : textIds;
+  return allIds.map((id) => ({
     id,
     object: 'model',
     created: 1687882411,
@@ -287,9 +303,8 @@ export function getDefaultChatModel() {
 
 export function getDefaultImageModel() {
   maybeProbeInBackground();
-  return modelIds.find((id) => /(?:^|[._-])(?:image|dall-e)(?:[._-]|$)/i.test(id))
-    || modelIds.find((id) => /image/i.test(id))
-    || '';
+  return modelIds.find(isImageModel)
+    || IMAGE_MODELS[0];
 }
 
 /**
@@ -299,14 +314,24 @@ export function getModelsStatus() {
   maybeProbeInBackground();
   const models = modelIds.map((id) => ({
     id,
-    type: /image/i.test(id) ? 'image' : 'text',
+    type: isImageModel(id) ? 'image' : 'text',
     ...(cache.results[id] || { available: null, latency: null, reason: 'not_probed' }),
+  }));
+  const hasAccount = loadAccountsForProxy().some(
+    (a) => a.type === 'codex' && a.accessToken && !isAccountUnavailable(a.accountId)
+  );
+  const imageModels = IMAGE_MODELS.filter((id) => !modelIds.includes(id)).map((id) => ({
+    id,
+    type: 'image',
+    available: hasAccount ? true : false,
+    latency: null,
+    reason: hasAccount ? null : 'no_account',
   }));
   return {
     lastProbed: cache.lastProbed,
     inProgress: cache.inProgress,
     catalogError,
-    models,
+    models: [...models, ...imageModels],
   };
 }
 
