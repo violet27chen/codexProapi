@@ -10,6 +10,7 @@ import { isAccountUnavailable, markAccountUnavailable } from './accountStatus.js
 import { refreshTokenByAccountId } from './tokenRefresh.js';
 import { getProxyAgent } from './proxyAgent.js';
 import { parseModelCatalog } from './modelCatalog.js';
+import { createSSEParser } from './sse.js';
 
 const BACKEND_URL = 'https://chatgpt.com/backend-api/codex/responses';
 const MODELS_URL = 'https://chatgpt.com/backend-api/codex/models?client_version=1.0.0';
@@ -115,12 +116,9 @@ export async function hasModelProbeOutput(stream) {
   if (!stream) return false;
   const reader = stream.getReader();
   const decoder = new TextDecoder();
-  let buffer = '';
   let hasText = false;
-  const inspectLine = (line) => {
-    if (!line.startsWith('data: ') || line.slice(6) === '[DONE]') return;
+  const inspectEvent = (event) => {
     try {
-      const event = JSON.parse(line.slice(6));
       if (event.type === 'response.output_text.delta' && String(event.delta || '').trim()) {
         hasText = true;
       } else if (event.type === 'response.output_text.done' && String(event.text || '').trim()) {
@@ -135,17 +133,15 @@ export async function hasModelProbeOutput(stream) {
       }
     } catch {}
   };
+  const parseChunk = createSSEParser(inspectEvent);
 
   try {
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-      for (const line of lines) inspectLine(line.trimEnd());
+      parseChunk(decoder.decode(value, { stream: true }));
     }
-    if (buffer) inspectLine(buffer.trimEnd());
+    parseChunk(decoder.decode(), true);
   } finally {
     reader.releaseLock();
   }

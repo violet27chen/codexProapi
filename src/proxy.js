@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 import { loadAuth } from './auth.js';
 import { markAccountUnavailable } from './accountStatus.js';
 import { recordUsage, clearUsage } from './usageTracker.js';
+import { createSSEParser } from './sse.js';
 import { refreshTokenByAccountId, isTokenExpiringSoon } from './tokenRefresh.js';
 import { getProxyAgent } from './proxyAgent.js';
 
@@ -306,31 +307,21 @@ function extractCompletedOutputText(event) {
 export async function parseStreamToText(stream) {
   const reader = stream.getReader();
   const dec = new TextDecoder();
-  let buffer = '';
   let fullText = '';
+  const parseEvent = (event) => {
+    if (event.type === 'response.output_text.delta' && event.delta) {
+      fullText += event.delta;
+    } else if (!fullText) {
+      fullText = extractCompletedOutputText(event);
+    }
+  };
+  const parseChunk = createSSEParser(parseEvent);
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
-    buffer += dec.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
-    for (const line of lines) {
-      if (line.startsWith('data: ')) {
-        const data = line.slice(6);
-        if (data === '[DONE]') continue;
-        try {
-          const event = JSON.parse(data);
-          const type = event.type;
-          // 只从 delta 收集，避免与 output_item.done 重复
-          if (type === 'response.output_text.delta' && event.delta) {
-            fullText += event.delta;
-          } else if (!fullText) {
-            fullText = extractCompletedOutputText(event);
-          }
-        } catch (_) {}
-      }
-    }
+    parseChunk(dec.decode(value, { stream: true }));
   }
+  parseChunk(dec.decode(), true);
   if (!fullText.trim()) {
     const error = new Error('model returned a completed response with no content');
     error.code = 'EMPTY_MODEL_RESPONSE';
@@ -345,9 +336,9 @@ export async function parseStreamToText(stream) {
  */
 export function pipeStreamToOpenAI(backendStream, res, model, id, opts = {}) {
   const dec = new TextDecoder();
-  let buffer = '';
   let hasSentRole = false;
   let completionChars = 0;
+  let doneReceived = false;
   const onFinish = opts.onFinish || (() => {});
   const sendChunk = (obj) => {
     res.write(`data: ${JSON.stringify(obj)}\n\n`);
@@ -372,42 +363,39 @@ export function pipeStreamToOpenAI(backendStream, res, model, id, opts = {}) {
   const reader = backendStream.getReader();
   return (async () => {
     try {
+      const parseEvent = (event) => {
+        if (event.type === '[DONE]') {
+          if (!completionChars) {
+            const error = new Error('model returned a completed response with no content');
+            error.code = 'EMPTY_MODEL_RESPONSE';
+            throw error;
+          }
+          onFinish(completionChars);
+          sendDelta({}, 'stop');
+          res.write('data: [DONE]\n\n');
+          doneReceived = true;
+          return;
+        }
+        if (event.type === 'response.output_text.delta' && event.delta) {
+          completionChars += String(event.delta).length;
+          if (!hasSentRole) {
+            sendDelta({ role: 'assistant' });
+            hasSentRole = true;
+          }
+          sendDelta({ content: event.delta });
+        } else if (!completionChars) {
+          sendTextIfMissing(extractCompletedOutputText(event));
+        }
+      };
+      const parseChunk = createSSEParser(parseEvent);
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        buffer += dec.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          const data = line.slice(6);
-          if (data === '[DONE]') {
-            if (!completionChars) {
-              const error = new Error('model returned a completed response with no content');
-              error.code = 'EMPTY_MODEL_RESPONSE';
-              throw error;
-            }
-            onFinish(completionChars);
-            sendDelta({}, 'stop');
-            res.write('data: [DONE]\n\n');
-            return;
-          }
-          try {
-            const event = JSON.parse(data);
-            const type = event.type;
-            if (type === 'response.output_text.delta' && event.delta) {
-              completionChars += String(event.delta).length;
-              if (!hasSentRole) {
-                sendDelta({ role: 'assistant' });
-                hasSentRole = true;
-              }
-              sendDelta({ content: event.delta });
-            } else if (!completionChars) {
-              sendTextIfMissing(extractCompletedOutputText(event));
-            }
-          } catch (_) {}
-        }
+        parseChunk(dec.decode(value, { stream: true }));
+        if (doneReceived) return;
       }
+      parseChunk(dec.decode(), true);
+      if (doneReceived) return;
       if (!completionChars) {
         const error = new Error('model returned a completed response with no content');
         error.code = 'EMPTY_MODEL_RESPONSE';
@@ -479,7 +467,6 @@ export async function pipeStreamToResponses(backendStream, res, model, opts = {}
   const messageId = `msg_${randomUUID().replace(/-/g, '')}`;
   const createdAt = Math.floor(Date.now() / 1000);
   const dec = new TextDecoder();
-  let buffer = '';
   let text = '';
   let finished = false;
   let started = false;
@@ -572,50 +559,45 @@ export async function pipeStreamToResponses(backendStream, res, model, opts = {}
 
   const reader = backendStream.getReader();
   try {
+    const parseEvent = (event) => {
+      if (event.type === '[DONE]') {
+        complete();
+        return;
+      }
+      if (event.type === 'response.output_text.delta' && event.delta) {
+        const delta = String(event.delta);
+        start();
+        text += delta;
+        emit({
+          type: 'response.output_text.delta',
+          item_id: messageId,
+          output_index: 0,
+          content_index: 0,
+          delta,
+        });
+      } else if (!text) {
+        const completedText = extractCompletedOutputText(event);
+        if (completedText.trim()) {
+          start();
+          text = completedText;
+          emit({
+            type: 'response.output_text.delta',
+            item_id: messageId,
+            output_index: 0,
+            content_index: 0,
+            delta: completedText,
+          });
+        }
+      }
+    };
+    const parseChunk = createSSEParser(parseEvent);
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      buffer += dec.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue;
-        const data = line.slice(6);
-        if (data === '[DONE]') {
-          complete();
-          return;
-        }
-        try {
-          const event = JSON.parse(data);
-          if (event.type === 'response.output_text.delta' && event.delta) {
-            const delta = String(event.delta);
-            start();
-            text += delta;
-            emit({
-              type: 'response.output_text.delta',
-              item_id: messageId,
-              output_index: 0,
-              content_index: 0,
-              delta,
-            });
-          } else if (!text) {
-            const completedText = extractCompletedOutputText(event);
-            if (completedText.trim()) {
-              start();
-              text = completedText;
-              emit({
-                type: 'response.output_text.delta',
-                item_id: messageId,
-                output_index: 0,
-                content_index: 0,
-                delta: completedText,
-              });
-            }
-          }
-        } catch (_) {}
-      }
+      parseChunk(dec.decode(value, { stream: true }));
     }
-    complete();
+    parseChunk(dec.decode(), true);
+    if (!finished) complete();
   } catch (error) {
     if (error.code === 'EMPTY_MODEL_RESPONSE' && !started) throw error;
     if (!finished) {
