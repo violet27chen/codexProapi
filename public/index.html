@@ -248,6 +248,7 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
                       <span x-show="!accHealth[acc.accountIdMask]" class="text-dim text-xs">—</span>
                     </td>
                     <td>
+                      <button type="button" class="btn btn-sm" @click="editAccount(acc)">修改账号</button>
                       <button type="button" class="btn btn-sm btn-danger" @click="delAcc(acc.index)">删除</button>
                     </td>
                   </tr>
@@ -417,12 +418,12 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
   <div class="overlay" x-show="showAdd" x-cloak @keydown.escape.window="showAdd=false">
     <div class="modal" @click.stop>
       <div class="modal-header">
-        <span class="modal-title">添加账号</span>
+        <span class="modal-title" x-text="accountEditIndex !== null ? '修改账号' : '添加账号'"></span>
         <button type="button" class="modal-close" @click="showAdd=false">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
-      <div class="tab-bar">
+      <div class="tab-bar" x-show="accountEditIndex === null">
         <div class="tab-item" :class="af.mode==='json'&&'active'" @click="af.mode='json'">粘贴 auth.json</div>
         <div class="tab-item" :class="af.mode==='manual'&&'active'" @click="af.mode='manual'">手动填写</div>
       </div>
@@ -449,12 +450,20 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
           <label class="form-label">Account ID</label>
           <input type="text" class="mono" x-model="af.account_id" placeholder="user-...">
         </div>
+        <div class="form-row" x-show="accountEditIndex !== null">
+          <label class="form-label">Access Token（留空保持不变）</label>
+          <input type="text" class="mono" x-model="af.access_token" placeholder="留空保持不变">
+        </div>
+        <div class="form-row">
+          <label class="form-label" x-text="accountEditIndex !== null ? 'Refresh Token（留空保持不变）' : 'Refresh Token（可选）'"></label>
+          <input type="text" class="mono" x-model="af.refresh_token" :placeholder="accountEditIndex !== null ? '留空保持不变' : '可选'">
+        </div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn" @click="showAdd=false">取消</button>
         <button type="button" class="btn btn-primary" @click="submitAdd()" :class="{'btn-dis':loading.addAcc}">
           <svg x-show="loading.addAcc" class="spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.22-8.56"/></svg>
-          确认添加
+          <span x-text="accountEditIndex !== null ? '确认修改' : '确认添加'"></span>
         </button>
       </div>
     </div>

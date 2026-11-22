@@ -58,6 +58,7 @@ export function listAccountsForApi() {
       return {
         index,
         name: item.name || `账号 ${index + 1}`,
+        accountId: accountId || '',
         accountIdMask: accountId ? `${accountId.slice(0, 8)}…` : '—',
         source: item.source || 'manual',
         tokenExp,
@@ -106,10 +107,12 @@ export function addAccount(body) {
     const data = JSON.parse(body.authJson);
     const auth = parseAuthFromJson(data);
     if (auth.type !== 'codex') throw new Error('仅支持 Codex 账号（access_token + account_id）');
+    const tokens = data.tokens || data;
     entry = {
       name: body.name || null,
       access_token: auth.accessToken,
       account_id: auth.accountId,
+      refresh_token: body.refresh_token || tokens.refresh_token || undefined,
       source: body.source || 'manual',
       proxy: body.proxy || null,
     };
@@ -133,9 +136,32 @@ export function addAccount(body) {
     const data = JSON.parse(raw);
     list = Array.isArray(data) ? data : (data.accounts || []);
   }
+  const existingIndex = list.findIndex(item => {
+    const itemAccountId = item.account_id || item.tokens?.account_id;
+    return itemAccountId && itemAccountId === entry.account_id;
+  });
+  if (existingIndex >= 0) {
+    const existing = list[existingIndex];
+    const existingTokens = existing.tokens ? {
+      ...existing.tokens,
+      access_token: entry.access_token,
+      account_id: entry.account_id,
+      refresh_token: entry.refresh_token || existing.tokens.refresh_token,
+    } : undefined;
+    list[existingIndex] = {
+      ...existing,
+      ...entry,
+      name: body.name !== undefined ? entry.name : (existing.name || entry.name),
+      refresh_token: entry.refresh_token || existing.refresh_token || existing.tokens?.refresh_token,
+      proxy: body.proxy !== undefined ? entry.proxy : (existing.proxy || null),
+      ...(existingTokens ? { tokens: existingTokens } : {}),
+    };
+    writeFileSync(path, JSON.stringify({ accounts: list }, null, 2), 'utf8');
+    return { ok: true, updated: true, duplicate: true, index: existingIndex };
+  }
   list.push(entry);
   writeFileSync(path, JSON.stringify({ accounts: list }, null, 2), 'utf8');
-  return { ok: true };
+  return { ok: true, updated: false, duplicate: false, index: list.length - 1 };
 }
 
 /**
@@ -201,18 +227,43 @@ export function batchAddAccounts(entries) {
     const data = JSON.parse(raw);
     list = Array.isArray(data) ? data : (data.accounts || []);
   }
+  let imported = 0;
+  let updated = 0;
   for (const entry of entries) {
-    list.push({
+    const normalized = {
       name: entry.name || null,
       access_token: entry.access_token,
       account_id: entry.account_id,
       refresh_token: entry.refresh_token,
       source: entry.source || 'batch_import',
       proxy: entry.proxy || null,
+    };
+    const existingIndex = list.findIndex(item => {
+      const itemAccountId = item.account_id || item.tokens?.account_id;
+      return itemAccountId && itemAccountId === normalized.account_id;
     });
+    if (existingIndex >= 0) {
+      const existingTokens = list[existingIndex].tokens ? {
+        ...list[existingIndex].tokens,
+        access_token: normalized.access_token,
+        account_id: normalized.account_id,
+        refresh_token: normalized.refresh_token || list[existingIndex].tokens.refresh_token,
+      } : undefined;
+      list[existingIndex] = {
+        ...list[existingIndex],
+        ...normalized,
+        name: normalized.name || list[existingIndex].name,
+        refresh_token: normalized.refresh_token || list[existingIndex].refresh_token,
+        ...(existingTokens ? { tokens: existingTokens } : {}),
+      };
+      updated++;
+    } else {
+      list.push(normalized);
+      imported++;
+    }
   }
   writeFileSync(path, JSON.stringify({ accounts: list }, null, 2), 'utf8');
-  return { ok: true };
+  return { ok: true, imported, updated };
 }
 
 /**
@@ -231,6 +282,63 @@ export function updateAccountProxy(index, proxyUrl) {
     return { ok: true };
   }
   throw new Error('未找到指定账号');
+}
+
+/**
+ * 更新账号完整信息；未提供的敏感字段保持原值。
+ */
+export function updateAccount(index, changes = {}) {
+  const path = getAccountsPath();
+  if (!existsSync(path)) throw new Error('账号文件不存在');
+  const raw = readFileSync(path, 'utf8');
+  const data = JSON.parse(raw);
+  const list = Array.isArray(data) ? data : (data.accounts || []);
+  const i = Number(index);
+  if (!Number.isInteger(i) || i < 0 || i >= list.length) {
+    throw new Error('未找到指定账号');
+  }
+
+  const current = list[i];
+  const nextAccountId = String(changes.account_id ?? current.account_id ?? current.tokens?.account_id ?? '').trim();
+  if (!nextAccountId) throw new Error('Account ID 不能为空');
+  const duplicateIndex = list.findIndex((item, itemIndex) => {
+    if (itemIndex === i) return false;
+    const accountId = item.account_id || item.tokens?.account_id;
+    return accountId === nextAccountId;
+  });
+  if (duplicateIndex >= 0) {
+    throw new Error('该 Account ID 已存在于账号列表中');
+  }
+
+  const nextAccessToken = String(changes.access_token ?? current.access_token ?? current.tokens?.access_token ?? '').trim();
+  if (!nextAccessToken) throw new Error('Access Token 不能为空');
+
+  const nextRefreshToken = String(
+    changes.refresh_token !== undefined
+      ? changes.refresh_token
+      : (current.refresh_token || current.tokens?.refresh_token || '')
+  ).trim();
+  const next = {
+    ...current,
+    name: changes.name !== undefined ? String(changes.name).trim() || null : current.name,
+    access_token: nextAccessToken,
+    account_id: nextAccountId,
+    proxy: changes.proxy !== undefined ? (String(changes.proxy).trim() || null) : current.proxy,
+  };
+  if (nextRefreshToken) next.refresh_token = nextRefreshToken;
+  else delete next.refresh_token;
+  if (current.tokens) {
+    next.tokens = {
+      ...current.tokens,
+      access_token: nextAccessToken,
+      account_id: nextAccountId,
+      ...(nextRefreshToken ? { refresh_token: nextRefreshToken } : {}),
+    };
+  }
+
+  list[i] = next;
+  writeFileSync(path, JSON.stringify({ accounts: list }, null, 2), 'utf8');
+  return { ok: true };
 }
 
 export { getAccountsPath };

@@ -20,6 +20,7 @@ import {
   getAccountsPath,
   batchAddAccounts,
   updateAccountProxy,
+  updateAccount,
 } from './accounts.js';
 import { getAuthorizeUrl, exchangeCodeForToken } from './oauth.js';
 import { getLocalCodexLoginStatus, startLocalCodexLogin } from './localCodexLogin.js';
@@ -509,9 +510,9 @@ app.post('/api/accounts/import-local', (req, res) => {
   if (!isLocalRequest(req)) return res.status(403).json({ error: '本机 Codex 导入仅允许通过本机访问' });
 
   try {
-    addLocalCodexAccount(req.body || {});
+    const result = addLocalCodexAccount(req.body || {});
     refreshAuthProvider();
-    res.json({ ok: true });
+    res.json(result);
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
@@ -549,6 +550,16 @@ app.put('/api/accounts/:index/proxy', (req, res) => {
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
+  }
+});
+
+app.put('/api/accounts/:index', (req, res) => {
+  try {
+    updateAccount(req.params.index, req.body || {});
+    refreshAuthProvider();
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
   }
 });
 
@@ -636,14 +647,16 @@ app.post('/api/accounts/batch-import', async (req, res) => {
       results.push({ token: tokenStr.slice(0, 15) + '...', status: 'error', error: e.message });
     }
   }
+  let importSummary = { imported: 0, updated: 0 };
   if (entries.length > 0) {
-    batchAddAccounts(entries);
+    importSummary = batchAddAccounts(entries);
     refreshAuthProvider();
   }
   res.json({
     ok: true,
     total: refreshTokens.length,
-    imported: entries.length,
+    imported: importSummary.imported,
+    updated: importSummary.updated,
     results,
   });
 });

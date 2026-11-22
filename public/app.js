@@ -19,8 +19,9 @@ function app() {
         refreshStatus: { active: false, intervalMinutes: 60, lastRun: 0, lastSummary: null, isRefreshing: false },
         showKey: false,
         showAdd: false,
+        accountEditIndex: null,
         localCodexLoginStatus: { status: 'idle', message: '', output: '' },
-        af: { mode: 'json', name: '', authJson: '', access_token: '', account_id: '', proxy: '' },
+        af: { mode: 'json', name: '', authJson: '', access_token: '', account_id: '', refresh_token: '', proxy: '' },
         showBatchImport: false,
         batchImportText: '',
         batchImportResults: null,
@@ -236,24 +237,54 @@ ${auth}  -d '${JSON.stringify(body)}'`;
 
         /* ── accounts ── */
         resetAddForm() {
-            this.af = { mode: 'json', name: '', authJson: '', access_token: '', account_id: '', proxy: '' };
+            this.accountEditIndex = null;
+            this.af = { mode: 'json', name: '', authJson: '', access_token: '', account_id: '', refresh_token: '', proxy: '' };
+        },
+        editAccount(acc) {
+            this.accountEditIndex = acc.index;
+            this.af = {
+                mode: 'manual',
+                name: acc.name || '',
+                authJson: '',
+                access_token: '',
+                account_id: acc.accountId || '',
+                refresh_token: '',
+                proxy: acc.proxy || '',
+            };
+            this.showAdd = true;
         },
         async submitAdd() {
             this.loading.addAcc = true;
             try {
                 let body;
-                if (this.af.mode === 'json') {
+                if (this.accountEditIndex !== null) {
+                    body = {
+                        name: this.af.name,
+                        access_token: this.af.access_token || undefined,
+                        account_id: this.af.account_id,
+                        refresh_token: this.af.refresh_token || undefined,
+                        proxy: this.af.proxy,
+                    };
+                } else if (this.af.mode === 'json') {
                     if (!this.af.authJson.trim()) { this.toast2('请粘贴 auth.json 内容', 'error'); return; }
                     body = { name: this.af.name || undefined, authJson: this.af.authJson, proxy: this.af.proxy || undefined };
                 } else {
                     if (!this.af.access_token || !this.af.account_id) { this.toast2('请填写 Token 和 Account ID', 'error'); return; }
-                    body = { name: this.af.name || undefined, access_token: this.af.access_token, account_id: this.af.account_id, proxy: this.af.proxy || undefined };
+                    body = { name: this.af.name || undefined, access_token: this.af.access_token, account_id: this.af.account_id, refresh_token: this.af.refresh_token || undefined, proxy: this.af.proxy || undefined };
                 }
-                const r = await fetch('/api/accounts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+                const editing = this.accountEditIndex !== null;
+                const r = await fetch(editing ? `/api/accounts/${this.accountEditIndex}` : '/api/accounts', {
+                    method: editing ? 'PUT' : 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
                 const d = await r.json();
-                if (r.ok && d.ok) { this.toast2('账号添加成功', 'success'); this.showAdd = false; await this.loadAccounts(); }
-                else this.toast2('添加失败：' + (d.error || '未知'), 'error');
-            } catch (e) { this.toast2('添加失败：' + e.message, 'error'); } finally { this.loading.addAcc = false; }
+                if (r.ok && d.ok) {
+                    this.toast2(editing ? '账号修改成功' : (d.updated ? '账号已存在，信息已更新' : '账号添加成功'), 'success');
+                    this.showAdd = false;
+                    await this.loadAccounts();
+                } else this.toast2((editing ? '修改' : '添加') + '失败：' + (d.error || '未知'), 'error');
+            } catch (e) { this.toast2('账号保存失败：' + e.message, 'error'); } finally { this.loading.addAcc = false; }
         },
         async importLocalCodex() {
             this.loading.localCodex = true;
@@ -265,7 +296,7 @@ ${auth}  -d '${JSON.stringify(body)}'`;
                 });
                 const d = await r.json();
                 if (r.ok && d.ok) {
-                    this.toast2('本机 Codex 账号添加成功', 'success');
+                    this.toast2(d.updated ? '本机 Codex 账号已更新' : '本机 Codex 账号添加成功', 'success');
                     await this.loadAccounts();
                 } else {
                     this.toast2('添加失败：' + (d.error || '未知'), 'error');
@@ -413,7 +444,7 @@ ${auth}  -d '${JSON.stringify(body)}'`;
                 });
                 const d = await r.json();
                 if (r.ok && d.ok) {
-                    this.toast2(`成功导入 ${d.imported}/${d.total} 个账号`, 'success');
+                    this.toast2(`成功导入：新增 ${d.imported} 个，更新 ${d.updated || 0} 个，共 ${d.total} 个`, 'success');
                     this.batchImportResults = d.results;
                     this.batchImportText = '';
                     await this.loadAccounts();
