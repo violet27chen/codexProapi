@@ -1,6 +1,6 @@
 # Codex Pro API
 
-将账号可用的 Codex 模型动态获取并以 OpenAI 兼容 API 形式暴露，可在 Cline、Cursor 等支持 OpenAI 接口的客户端中使用。支持文本对话（/v1/chat/completions）和图像生成（/v1/images/generations）。
+将账号可用的 Codex 模型动态获取并以 OpenAI 兼容 API 形式暴露，可在 Cline、Cursor 等支持 OpenAI 接口的客户端中使用。支持 Chat Completions（/v1/chat/completions）、Responses API（/v1/responses）和图像生成（/v1/images/generations）。
 
 英文说明请参阅 README.md。
 
@@ -45,21 +45,8 @@
 
 1. 打开 GitHub Releases：https://github.com/violettoolssite/codexProapi/releases。
 2. 选择最新版本，在 Assets 中下载 Windows 安装包：Codex Pro API Setup x.x.x.exe（安装时可选路径、桌面/开始菜单快捷方式）。
-   说明：桌面版目前仅提供 Windows 版本；macOS 和 Linux 用户请使用下方的命令行运行方式。
+   说明：桌面版目前仅提供 Windows 版本。
 3. 安装并运行。配置页会直接在软件窗口内打开，关闭软件后，本地服务会随之关闭。账号与数据保存在本机的用户数据目录下，与安装目录分离。
-
-### 方式二：命令行运行
-
-需要 Node.js 18 或更高版本。在终端中执行以下命令：
-
-```bash
-npm install -g codex-proapi
-codex-proapi
-```
-
-或者克隆仓库，在项目目录中执行 `npm install` 安装依赖，然后运行 `npm start` 启动服务。
-
-启动后在浏览器打开 http://localhost:1455/。默认端口为 1455。全局安装时，账号与用量数据保存在 ~/.codex-proapi/ 目录下。
 
 ### 本地构建 Windows 安装包（开发者）
 
@@ -78,6 +65,22 @@ npm run dist:win
 | Base URL | http://localhost:1455/v1（必须包含 /v1；若使用自定义主机或端口，请改为对应地址 + /v1） |
 | 模型 | 使用 `GET /v1/models` 返回的模型；可在系统设置选择默认模型，也可在每次请求中传入模型 ID |
 | API Key | 任意填写（不进行强校验，认证基于您配置的 Codex 账号） |
+
+### OpenAI 两种请求格式
+
+Chat Completions 使用 `messages` 和 `/v1/chat/completions`；Responses API 使用文本/图片 `input` 和 `/v1/responses`，非流式响应为标准 `response` 对象，`stream: true` 时返回 Responses 事件流。Responses API 暂不支持 tools / function calling。
+
+```bash
+# Chat Completions
+curl http://localhost:1455/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"自动获取的模型 ID","messages":[{"role":"user","content":"你好"}],"stream":false}'
+
+# Responses API
+curl http://localhost:1455/v1/responses \
+  -H "Content-Type: application/json" \
+  -d '{"model":"自动获取的模型 ID","input":"你好","stream":false}'
+```
 
 ### 操作步骤：
 
@@ -129,17 +132,30 @@ npm run dist:win
 
 ---
 
+## Claude Messages 兼容接口
+
+`POST /v1/messages` 接收 Claude Messages 格式，请求可使用 `Authorization: Bearer <API_KEY>` 或 `x-api-key: <API_KEY>` 鉴权。响应保持 OpenAI `chat.completion` 或 `chat.completion.chunk` 格式。
+
+```bash
+curl -X POST http://localhost:1455/v1/messages \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: <API_KEY>" \
+  -d '{"model":"自动获取的模型 ID","max_tokens":1024,"system":"You are a helpful assistant.","messages":[{"role":"user","content":"你好"}],"stream":false}'
+```
+
+---
+
 ## 图像生成
 
 支持通过 POST /v1/images/generations（OpenAI 兼容格式）调用图像生成服务，由 picture_v2 协议支持。
-- 支持的模型：gpt-image-2（默认）、gpt-image-1.5、gpt-image-1、gpt-image-1-mini。
+- 支持的图片模型由上游模型目录和账号能力自动发现，不再固定列表。
 - 返回值：返回一个本地代理 URL，浏览器可直接打开，缓存有效期为 30 分钟。
 
 调用示例：
 ```bash
 curl -X POST http://localhost:1455/v1/images/generations \
   -H "Content-Type: application/json" \
-  -d '{"model":"gpt-image-2","prompt":"一只猫","n":1,"size":"1024x1024"}'
+  -d '{"prompt":"一只猫","n":1,"size":"1024x1024"}'
 ```
 
 ---

@@ -30,10 +30,10 @@
     "node": ">=18"
   },
   "dependencies": {
-    "codex-proapi": "^1.0.8",
     "express": "^4.21.0",
     "https-proxy-agent": "^9.0.0",
-    "socks-proxy-agent": "^10.0.0"
+    "socks-proxy-agent": "^10.0.0",
+    "undici": "^7.16.0"
   },
   "optionalDependencies": {
     "cloakbrowser": "^0.3.28",

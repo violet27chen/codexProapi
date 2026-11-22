@@ -36,7 +36,7 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
           仪表盘
         </div>
-        <div class="nav-item" :class="page==='accounts'&&'active'" @click="page='accounts'; loadAccounts()">
+        <div class="nav-item" :class="page==='accounts'&&'active'" @click="page='accounts'; loadAccounts(); loadUsage()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
           账号管理
           <span x-show="accounts.length>0" class="badge badge-info ml-auto" x-text="accounts.length"></span>
@@ -149,9 +149,31 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
         </div>
 
         <div class="card">
-          <div class="card-title">调用示例</div>
+          <div class="card-title">OpenAI Chat Completions 调用示例</div>
+          <div class="text-muted text-xs mono">POST /v1/chat/completions · Base URL: http://localhost:1455/v1</div>
           <pre class="code-block" x-text="curlExample"></pre>
           <button type="button" class="btn btn-sm mt-2" @click="copyTxt(curlExample)">复制</button>
+        </div>
+
+        <div class="card">
+          <div class="card-title">OpenAI Responses API 调用示例</div>
+          <div class="text-muted text-xs mono">POST /v1/responses · Base URL: http://localhost:1455/v1</div>
+          <pre class="code-block" x-text="responsesCurlExample"></pre>
+          <button type="button" class="btn btn-sm mt-2" @click="copyTxt(responsesCurlExample)">复制</button>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Claude Messages 调用示例（响应为 OpenAI 格式）</div>
+          <div class="text-muted text-xs mono">POST /v1/messages · Base URL: http://localhost:1455</div>
+          <pre class="code-block" x-text="claudeCurlExample"></pre>
+          <button type="button" class="btn btn-sm mt-2" @click="copyTxt(claudeCurlExample)">复制</button>
+        </div>
+
+        <div class="card">
+          <div class="card-title">图片生成调用示例（模型自动获取）</div>
+          <div class="text-muted text-xs mono">POST /v1/images/generations · Base URL: http://localhost:1455</div>
+          <pre class="code-block" x-text="imageCurlExample"></pre>
+          <button type="button" class="btn btn-sm mt-2" @click="copyTxt(imageCurlExample)">复制</button>
         </div>
 
         <div class="card">
@@ -199,7 +221,10 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
                   <tr>
                     <td class="text-muted" x-text="acc.index+1"></td>
                     <td>
-                      <div x-text="acc.name || ('账号 '+(acc.index+1))"></div>
+                      <div class="flex items-center gap-2">
+                        <span x-text="acc.name || ('账号 '+(acc.index+1))"></span>
+                        <span x-show="getAccountUsage(acc)?.is_member" class="badge badge-info" x-text="getAccountUsage(acc)?.plan_label"></span>
+                      </div>
                       <div class="mono text-dim text-xs" x-text="acc.accountIdMask||''"></div>
                     </td>
                     <td class="mono text-xs text-muted" x-text="acc.source||'—'"></td>
@@ -258,17 +283,32 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
         <div class="card">
           <div class="table-wrap">
             <table>
-              <thead><tr><th>账号</th><th>已用 Token</th><th>剩余配额</th></tr></thead>
+              <thead><tr><th>账号</th><th>本地 Token 用量</th><th>5 小时剩余</th><th>周剩余</th><th>月剩余</th></tr></thead>
               <tbody>
-                <tr x-show="usageData.length===0"><td colspan="3" class="empty">暂无数据</td></tr>
+                <tr x-show="usageData.length===0"><td colspan="5" class="empty">暂无数据</td></tr>
                 <template x-for="(u, idx) in usageData" :key="idx">
                   <tr>
                     <td>
-                      <div x-text="getAccName(u.index)"></div>
+                      <div class="flex items-center gap-2">
+                        <span x-text="getAccName(u.index)"></span>
+                        <span x-show="u.is_member" class="badge badge-info" x-text="u.plan_label"></span>
+                      </div>
                       <div class="mono text-dim text-xs" x-text="u.accountIdMask||''"></div>
+                      <div class="text-dim text-xs" x-show="u.quota_error" x-text="u.quota_error"></div>
                     </td>
                     <td class="mono" x-text="formatTok(u.used_tokens)"></td>
-                    <td class="text-muted" x-text="u.remaining_pct!=null ? u.remaining_pct+'%' : '—'"></td>
+                    <td class="text-muted">
+                      <span x-text="u.is_member && u.quota?.five_hour ? u.quota.five_hour.remaining_pct+'%' : '—'"></span>
+                      <div class="text-dim text-xs" x-text="u.is_member ? quotaResetLabel(u.quota?.five_hour?.reset_at) : ''"></div>
+                    </td>
+                    <td class="text-muted">
+                      <span x-text="u.is_member && u.quota?.weekly ? u.quota.weekly.remaining_pct+'%' : '—'"></span>
+                      <div class="text-dim text-xs" x-text="u.is_member ? quotaResetLabel(u.quota?.weekly?.reset_at) : ''"></div>
+                    </td>
+                    <td class="text-muted">
+                      <span x-text="u.is_member===false && u.quota?.monthly ? u.quota.monthly.remaining_pct+'%' : '—'"></span>
+                      <div class="text-dim text-xs" x-text="u.is_member===false ? quotaResetLabel(u.quota?.monthly?.reset_at) : ''"></div>
+                    </td>
                   </tr>
                 </template>
               </tbody>
@@ -450,6 +490,7 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
         </button>
       </div>
     </div>
+  </div>
   <!-- ── BIND PROXY MODAL ── -->
   <div class="overlay" x-show="showBindProxy" x-cloak @keydown.escape.window="showBindProxy=false">
     <div class="modal" @click.stop style="max-width:420px">

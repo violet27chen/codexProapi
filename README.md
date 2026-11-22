@@ -1,6 +1,6 @@
 # Codex Pro API
 
-Exposes Codex models discovered dynamically from your account as an OpenAI-compatible API so you can use it in Cline, Cursor, or any client that supports OpenAI-style endpoints. Supports text chat (/v1/chat/completions) and image generation (/v1/images/generations).
+Exposes Codex models discovered dynamically from your account as an OpenAI-compatible API so you can use it in Cline, Cursor, or any client that supports OpenAI-style endpoints. Supports Chat Completions (/v1/chat/completions), the Responses API (/v1/responses), and image generation (/v1/images/generations).
 
 For Chinese documentation, please see README.zh-CN.md.
 
@@ -45,21 +45,8 @@ If you prefer not to use the command line:
 
 1. Open GitHub Releases at https://github.com/violettoolssite/codexProapi/releases.
 2. Select the latest release and download the Windows installer from Assets: Codex Pro API Setup x.x.x.exe.
-   Note: The desktop app is Windows only for now; on macOS or Linux, use the command-line option below.
+   Note: The desktop app is Windows only for now.
 3. Install and run. The configuration panel opens inside the app window. Closing the app stops the local service. All accounts and configuration data are stored in your local user data directory, separate from the installation folder.
-
-### Option 2: Command line
-
-Ensure you have Node.js 18 or later installed. Run the following commands in a terminal:
-
-```bash
-npm install -g codex-proapi
-codex-proapi
-```
-
-Or clone the repository, run `npm install` to install dependencies, and then run `npm start`.
-
-Once started, open http://localhost:1455/ in your browser. The default port is 1455. When running globally, configuration and usage statistics are stored under ~/.codex-proapi/.
 
 ---
 
@@ -72,6 +59,22 @@ Configure your client using the following settings:
 | Base URL | http://localhost:1455/v1 (must include /v1; or your custom host/port + /v1) |
 | Model | Any model returned by `GET /v1/models`; choose a default in System Settings or pass a model ID in each request |
 | API Key | Any value (not validated; authentication is derived from your configured accounts) |
+
+### OpenAI request formats
+
+Chat Completions uses `messages` at `/v1/chat/completions`; the Responses API uses text/image `input` at `/v1/responses`. Non-streaming Responses requests return a standard `response` object, and `stream: true` returns Responses events. Responses API tools / function calling are not supported yet.
+
+```bash
+# Chat Completions
+curl http://localhost:1455/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"dynamically-discovered-model-id","messages":[{"role":"user","content":"Hello"}],"stream":false}'
+
+# Responses API
+curl http://localhost:1455/v1/responses \
+  -H "Content-Type: application/json" \
+  -d '{"model":"dynamically-discovered-model-id","input":"Hello","stream":false}'
+```
 
 ### Steps:
 
@@ -123,17 +126,30 @@ If client tools or function-calling cause a 400 error, disable tools/function-ca
 
 ---
 
+## Claude Messages Compatibility
+
+`POST /v1/messages` accepts Claude Messages request format. Authenticate with `Authorization: Bearer <API_KEY>` or `x-api-key: <API_KEY>`. Responses use the OpenAI `chat.completion` or `chat.completion.chunk` format.
+
+```bash
+curl -X POST http://localhost:1455/v1/messages \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: <API_KEY>" \
+  -d '{"model":"dynamically-discovered-model-id","max_tokens":1024,"system":"You are a helpful assistant.","messages":[{"role":"user","content":"Hello"}],"stream":false}'
+```
+
+---
+
 ## Image Generation
 
 Supported via POST /v1/images/generations (OpenAI-compatible) powered by picture_v2 system hints.
-- Supported models: gpt-image-2 (default), gpt-image-1.5, gpt-image-1, gpt-image-1-mini.
+- Supported image models are discovered automatically from the upstream model catalog and account capabilities; no fixed model list is displayed.
 - Output: Returns a local proxy URL with a 30-minute browser cache.
 
 Request Example:
 ```bash
 curl -X POST http://localhost:1455/v1/images/generations \
   -H "Content-Type: application/json" \
-  -d '{"model":"gpt-image-2","prompt":"a cat","n":1,"size":"1024x1024"}'
+  -d '{"prompt":"a cat","n":1,"size":"1024x1024"}'
 ```
 
 Parameters: model, prompt, n (1-10), size, quality, output_format, background, moderation.

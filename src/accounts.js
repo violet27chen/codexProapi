@@ -79,7 +79,7 @@ export function loadAccountsForProxy() {
   const data = JSON.parse(raw);
   const list = Array.isArray(data) ? data : (data.accounts || []);
   const auths = [];
-  for (const item of list) {
+  for (const [index, item] of list.entries()) {
     const tokens = item.tokens || (item.access_token ? { access_token: item.access_token, account_id: item.account_id } : null);
     if (tokens?.access_token && tokens?.account_id) {
       auths.push({
@@ -88,6 +88,7 @@ export function loadAccountsForProxy() {
         accountId: tokens.account_id,
         name: item.name || null,
         proxyUrl: item.proxy || null, // 代理 URL
+        index,
       });
     }
   }

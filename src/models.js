@@ -20,6 +20,10 @@ const IMAGE_MODELS = [
   'gpt-image-1',
 ];
 
+function isImageModel(id) {
+  return /image|dall-e/i.test(id);
+}
+
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 小时
 const PROBE_TIMEOUT_MS = 12 * 1000;
 
@@ -275,11 +279,13 @@ function maybeProbeInBackground() {
  */
 export function getAvailableModelsOpenAI() {
   maybeProbeInBackground();
-  const textIds = modelIds.filter((id) => !cache.results[id] || cache.results[id].available);
+  const textIds = modelIds.filter((id) => !isImageModel(id) && (!cache.results[id] || cache.results[id].available));
   const hasAccount = loadAccountsForProxy().some(
     (a) => a.type === 'codex' && a.accessToken && !isAccountUnavailable(a.accountId)
   );
-  const allIds = hasAccount ? [...textIds, ...IMAGE_MODELS] : textIds;
+  const catalogImageIds = modelIds.filter(isImageModel);
+  const imageIds = [...new Set([...catalogImageIds, ...IMAGE_MODELS])];
+  const allIds = hasAccount ? [...textIds, ...imageIds] : textIds;
   return allIds.map((id) => ({
     id,
     object: 'model',
@@ -295,20 +301,26 @@ export function getDefaultChatModel() {
   return cache.inProgress || cache.lastProbed === 0 ? modelIds[0] || '' : '';
 }
 
+export function getDefaultImageModel() {
+  maybeProbeInBackground();
+  return modelIds.find(isImageModel)
+    || IMAGE_MODELS[0];
+}
+
 /**
  * 获取完整的探测状态（用于前端 /api/models 详细页）
  */
 export function getModelsStatus() {
   maybeProbeInBackground();
-  const textModels = modelIds.map((id) => ({
+  const models = modelIds.map((id) => ({
     id,
-    type: 'text',
+    type: isImageModel(id) ? 'image' : 'text',
     ...(cache.results[id] || { available: null, latency: null, reason: 'not_probed' }),
   }));
   const hasAccount = loadAccountsForProxy().some(
     (a) => a.type === 'codex' && a.accessToken && !isAccountUnavailable(a.accountId)
   );
-  const imageModels = IMAGE_MODELS.map((id) => ({
+  const imageModels = IMAGE_MODELS.filter((id) => !modelIds.includes(id)).map((id) => ({
     id,
     type: 'image',
     available: hasAccount ? true : false,
@@ -319,7 +331,7 @@ export function getModelsStatus() {
     lastProbed: cache.lastProbed,
     inProgress: cache.inProgress,
     catalogError,
-    models: [...textModels, ...imageModels],
+    models: [...models, ...imageModels],
   };
 }
 

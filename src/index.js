@@ -6,7 +6,11 @@ import { join, dirname, resolve } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
 import { loadAuth, createRoundRobinProvider } from './auth.js';
-import { handleChatCompletions } from './proxy.js';
+import {
+  handleChatCompletions,
+  normalizeClaudeMessagesRequest,
+  normalizeOpenAIResponsesRequest,
+} from './proxy.js';
 import {
   listAccountsForApi,
   addAccount,
@@ -20,10 +24,12 @@ import {
 import { getAuthorizeUrl, exchangeCodeForToken } from './oauth.js';
 import { isAccountUnavailable } from './accountStatus.js';
 import { getRemainingPct, getUsedTokens, QUOTA } from './usageTracker.js';
+import { fetchCodexUsage } from './quota.js';
 import { generateImage, getCachedImage, fetchImageBytes } from './imagegen.js';
 import {
   getAvailableModelsOpenAI,
   getDefaultChatModel,
+  getDefaultImageModel,
   getModelsStatus,
   refreshModels,
   initialProbe,
@@ -153,9 +159,9 @@ app.put('/api/config', (req, res) => {
   saveConfig({ ...loadConfig(), api_key: typeof api_key === 'string' ? api_key : '' });
   res.json({ ok: true });
 });
-  app.get('/api/version', (req, res) => res.json({ version: pkg.version || '0.0.0' }));
+  app.get('/api/version', (req, res) => res.json({ version: pkg.version || '0.0.1' }));
 } catch {
-  app.get('/api/version', (req, res) => res.json({ version: '0.0.0' }));
+  app.get('/api/version', (req, res) => res.json({ version: '0.0.1' }));
 }
 
 app.get('/', (req, res) => {
@@ -166,7 +172,7 @@ app.use(express.static(join(__dirname, '..', 'public')));
 
 const requestLogs = [];
 const MAX_LOGS = 200;
-const LOG_PATHS = ['/health', '/v1/models', '/v1/chat/completions', '/chat/completions', '/responses'];
+const LOG_PATHS = ['/health', '/v1/models', '/v1/chat/completions', '/v1/responses', '/v1/messages', '/chat/completions', '/responses'];
 
 app.use((req, res, next) => {
   if (!LOG_PATHS.includes(req.path)) return next();
@@ -187,13 +193,16 @@ app.use((req, res, next) => {
   next();
 });
 
-const API_KEY_PATHS = ['/v1/models', '/v1/chat/completions', '/chat/completions', '/responses'];
+const API_KEY_PATHS = ['/v1/models', '/v1/chat/completions', '/v1/responses', '/v1/messages', '/chat/completions', '/responses'];
 app.use((req, res, next) => {
   if (!API_KEY_PATHS.includes(req.path)) return next();
   const cfg = loadConfig();
   if (!cfg.api_key || String(cfg.api_key).trim() === '') return next();
-  const auth = req.headers.authorization;
-  const token = (auth && String(auth).startsWith('Bearer ')) ? String(auth).slice(7).trim() : '';
+  const authorization = req.headers.authorization;
+  const bearerToken = (authorization && String(authorization).startsWith('Bearer '))
+    ? String(authorization).slice(7).trim()
+    : '';
+  const token = bearerToken || (typeof req.headers['x-api-key'] === 'string' ? req.headers['x-api-key'].trim() : '');
   if (token !== cfg.api_key) {
     res.status(401).json({ error: 'Invalid or missing API key' });
     return;
@@ -295,9 +304,52 @@ app.post('/v1/chat/completions', async (req, res) => {
   }
 });
 
+app.post('/v1/responses', async (req, res) => {
+  let body;
+  try {
+    body = normalizeOpenAIResponsesRequest(req.body);
+  } catch (error) {
+    return res.status(400).json({
+      error: { message: error.message, type: 'invalid_request_error', code: 'invalid_input' },
+    });
+  }
+  body = withDefaultModel(body);
+  if (!body.model) return res.status(503).json({ error: '暂无可用模型，请先添加账号并刷新模型目录' });
+  if (body.messages.length === 0) {
+    return res.status(400).json({
+      error: { message: 'Responses API 的 input 不能为空', type: 'invalid_request_error', code: 'invalid_input' },
+    });
+  }
+  const { accounts } = listAccountsForApi();
+  const accountCount = accounts.length || 1;
+  const usedAuth = await handleChatCompletions(body, res, getAuthProvider, accountCount, 'response');
+  if (res._logMeta && usedAuth) {
+    const mask = usedAuth.accountId ? usedAuth.accountId.slice(0, 8) + '…' : '—';
+    const found = accounts.find((a) => a.accountIdMask === mask);
+    res._logMeta.account = found ? (found.name || `账号${found.index + 1}`) : mask;
+  }
+});
+
 app.post('/chat/completions', async (req, res) => {
   const body = withDefaultModel(req.body);
   if (!body.model) return res.status(503).json({ error: '暂无可用模型，请先添加账号并刷新模型目录' });
+  const { accounts } = listAccountsForApi();
+  const accountCount = accounts.length || 1;
+  const usedAuth = await handleChatCompletions(body, res, getAuthProvider, accountCount);
+  if (res._logMeta && usedAuth) {
+    const mask = usedAuth.accountId ? usedAuth.accountId.slice(0, 8) + '…' : '—';
+    const found = accounts.find((a) => a.accountIdMask === mask);
+    res._logMeta.account = found ? (found.name || `账号${found.index + 1}`) : mask;
+  }
+});
+
+// Claude Messages 格式兼容入口；响应保持 OpenAI Chat Completions 格式
+app.post('/v1/messages', async (req, res) => {
+  const body = withDefaultModel(normalizeClaudeMessagesRequest(req.body));
+  if (!body.model) return res.status(503).json({ error: '暂无可用模型，请先添加账号并刷新模型目录' });
+  if (!Array.isArray(body.messages) || body.messages.length === 0) {
+    return res.status(400).json({ error: 'messages 不能为空' });
+  }
   const { accounts } = listAccountsForApi();
   const accountCount = accounts.length || 1;
   const usedAuth = await handleChatCompletions(body, res, getAuthProvider, accountCount);
@@ -333,24 +385,34 @@ app.delete('/api/logs', (req, res) => {
 app.get('/api/usage', async (req, res) => {
   try {
     const auths = loadAccountsForProxy();
-    const result = [];
-    for (let i = 0; i < auths.length; i++) {
-      const auth = auths[i];
+    const result = await Promise.all(auths.map(async (auth, i) => {
       if (auth.type !== 'codex' || !auth.accessToken) {
-        result.push({ index: i, remaining_pct: null, used_tokens: null });
-        continue;
+        return { index: auth.index ?? i, remaining_pct: null, used_tokens: null };
       }
       if (isAccountUnavailable(auth.accountId)) {
-        result.push({ index: i, remaining_pct: 0, used_tokens: 0 });
-        continue;
+        return {
+          index: auth.index ?? i,
+          accountIdMask: `${auth.accountId.slice(0, 8)}…`,
+          remaining_pct: 0,
+          used_tokens: 0,
+          quota: null,
+          quota_error: '账号不可用',
+        };
       }
-      result.push({
-        index: i,
+      const accountUsage = {
+        index: auth.index ?? i,
+        accountIdMask: `${auth.accountId.slice(0, 8)}…`,
         remaining_pct: getRemainingPct(auth.accountId),
         used_tokens: getUsedTokens(auth.accountId),
         quota_tokens: QUOTA,
-      });
-    }
+      };
+      try {
+        return { ...accountUsage, ...(await fetchCodexUsage(auth)) };
+      } catch (error) {
+        console.warn(`[Usage] ${accountUsage.accountIdMask} 配额读取失败: ${error.message}`);
+        return { ...accountUsage, quota: null, quota_error: error.message };
+      }
+    }));
     res.json({ accounts: result });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -574,7 +636,9 @@ app.post('/v1/images/generations', async (req, res) => {
     if (!auth) {
       return res.status(503).json({ error: { message: '所有账号不可用' } });
     }
-    const result = await generateImage(req.body, auth);
+    const imageRequest = { ...req.body };
+    if (!imageRequest.model) imageRequest.model = getDefaultImageModel();
+    const result = await generateImage(imageRequest, auth);
     // 将 _token 替换为本地代理 URL
     const host = req.get('host') || `localhost:${PORT}`;
     const proto = (req.get('x-forwarded-proto') || 'http').split(',')[0].trim();

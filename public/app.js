@@ -32,6 +32,8 @@ function app() {
         _tt: null,
         endpoints: [
             { m: 'POST', path: '/v1/chat/completions', desc: '对话补全' },
+            { m: 'POST', path: '/v1/responses', desc: 'OpenAI Responses API' },
+            { m: 'POST', path: '/v1/messages', desc: 'Claude Messages 格式兼容（OpenAI 格式响应）' },
             { m: 'POST', path: '/v1/images/generations', desc: '图片生成' },
             { m: 'GET',  path: '/v1/models',            desc: '模型列表' },
             { m: 'GET',  path: '/health',               desc: '健康检查' },
@@ -57,12 +59,45 @@ function app() {
         },
         get curlExample() {
             const k = this.cfg.api_key;
-            const auth = k ? `\n  -H "Authorization: Bearer ${k}" \\` : '';
-            const body = { messages: [{ role: 'user', content: '你好' }] };
-            if (this.cfg.default_model) body.model = this.cfg.default_model;
-            return `curl http://localhost:1455/v1/chat/completions \\
-  -H "Content-Type: application/json" \\${auth}
-  -d '${JSON.stringify(body)}'`;
+            const auth = k ? `  -H "Authorization: Bearer ${k}" \\\n` : '';
+            const model = this.cfg.default_model || this.selectableModels[0]?.id || '自动获取的模型 ID';
+            const body = { model, messages: [{ role: 'user', content: '你好' }], stream: false };
+            return `curl -sS http://localhost:1455/v1/chat/completions \\
+  -H "Content-Type: application/json" \\
+${auth}  -d '${JSON.stringify(body)}'`;
+        },
+        get claudeCurlExample() {
+            const k = this.cfg.api_key;
+            const auth = k ? `  -H "x-api-key: ${k}" \\\n` : '';
+            const model = this.cfg.default_model || this.selectableModels[0]?.id || '自动获取的模型 ID';
+            const body = {
+                model,
+                max_tokens: 1024,
+                system: 'You are a helpful assistant.',
+                messages: [{ role: 'user', content: '你好' }],
+                stream: false,
+            };
+            return `curl -sS http://localhost:1455/v1/messages \\
+  -H "Content-Type: application/json" \\
+${auth}  -d '${JSON.stringify(body)}'`;
+        },
+        get responsesCurlExample() {
+            const k = this.cfg.api_key;
+            const auth = k ? `  -H "Authorization: Bearer ${k}" \\\n` : '';
+            const model = this.cfg.default_model || this.selectableModels[0]?.id || '自动获取的模型 ID';
+            const body = { model, input: '你好', stream: false };
+            return `curl -sS http://localhost:1455/v1/responses \\
+  -H "Content-Type: application/json" \\
+${auth}  -d '${JSON.stringify(body)}'`;
+        },
+        get imageCurlExample() {
+            const k = this.cfg.api_key;
+            const auth = k ? `  -H "Authorization: Bearer ${k}" \\\n` : '';
+            const imageModel = this.models.find(m => m.type === 'image' && m.available !== false)?.id;
+            const body = { prompt: '一只橘猫坐在窗边', n: 1, size: '1024x1024', ...(imageModel ? { model: imageModel } : {}) };
+            return `curl -sS http://localhost:1455/v1/images/generations \\
+  -H "Content-Type: application/json" \\
+${auth}  -d '${JSON.stringify(body)}'`;
         },
 
         /* ── init ── */
@@ -121,7 +156,14 @@ function app() {
         },
         async loadUsage() {
             this.loading.usage = true;
-            try { this.usageData = (await (await fetch('/api/usage')).json()).accounts || []; } catch {} finally { this.loading.usage = false; }
+            try {
+                const r = await fetch('/api/usage');
+                const d = await r.json();
+                if (!r.ok) throw new Error(d.error || '读取用量失败');
+                this.usageData = d.accounts || [];
+            } catch (e) {
+                this.toast2('读取配额失败：' + e.message, 'error');
+            } finally { this.loading.usage = false; }
         },
         async loadLogs() {
             this.loading.logs = true;
@@ -362,6 +404,17 @@ function app() {
         getAccName(idx) {
             const a = this.accounts.find(x => x.index === idx);
             return a ? (a.name || `账号 ${idx + 1}`) : `账号 ${idx + 1}`;
+        },
+        getAccountUsage(account) {
+            return this.usageData.find(u => u.accountIdMask && u.accountIdMask === account.accountIdMask);
+        },
+        quotaResetLabel(timestamp) {
+            if (!timestamp) return '';
+            const value = typeof timestamp === 'number' && timestamp < 1e12 ? timestamp * 1000 : timestamp;
+            const date = new Date(value);
+            return Number.isNaN(date.getTime())
+                ? ''
+                : '重置 ' + date.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
         },
         formatTok(n) {
             if (!n) return '0';
