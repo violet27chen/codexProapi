@@ -40,14 +40,18 @@ Clients (Cline, Cursor, etc.) call the OpenAI-compatible API; this service round
 
 ## How to get started
 
-### Option 1: Desktop app (recommended)
+### Option 1: Local CLI
 
-If you prefer not to use the command line:
+Requires Node.js ≥ 18. Clone, install, and start:
 
-1. Open GitHub Releases at https://github.com/violettoolssite/codexProapi/releases.
-2. Select the latest release and download the Windows installer from Assets: Codex Pro API Setup x.x.x.exe.
-   Note: The desktop app is Windows only for now.
-3. Install and run. The configuration panel opens inside the app window. Closing the app stops the local service. All accounts and configuration data are stored in your local user data directory, separate from the installation folder.
+```bash
+git clone https://github.com/violettoolssite/codexProapi.git
+cd codexProapi
+npm install
+npm start
+```
+
+Open `http://localhost:1455` to add accounts. Accounts and settings are stored in the local `data/` directory.
 
 ### Option 2: Docker Compose
 
@@ -67,10 +71,6 @@ docker compose logs -f
 Update with `git pull && docker compose up -d --build`. Stop the service while preserving data with `docker compose down`. Removing the named volume permanently deletes the accounts and related data.
 
 When serving through a domain or reverse proxy, set `PUBLIC_URL` to the full externally accessible URL before starting (for example, `https://api.example.com`) so OAuth uses the correct callback address. Account tokens are stored in the persistent volume; secure access to the Docker host and volume.
-
-### Build a Windows installer locally (developers)
-
-Run `npm run dist:win` from the project directory. The installer is written to `release/`.
 
 ---
 

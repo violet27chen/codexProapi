@@ -40,22 +40,18 @@
 
 ## 如何开始使用
 
-### 方式一：桌面版（推荐）
+### 方式一：本地 CLI
 
-不想使用命令行时，可直接安装桌面版：
+需要 Node.js ≥ 18。克隆、安装、启动：
 
-1. 打开 GitHub Releases：https://github.com/violettoolssite/codexProapi/releases。
-2. 选择最新版本，在 Assets 中下载 Windows 安装包：Codex Pro API Setup x.x.x.exe（安装时可选路径、桌面/开始菜单快捷方式）。
-   说明：桌面版目前仅提供 Windows 版本。
-3. 安装并运行。配置页会直接在软件窗口内打开，关闭软件后，本地服务会随之关闭。账号与数据保存在本机的用户数据目录下，与安装目录分离。
-
-### 本地构建 Windows 安装包（开发者）
-
-在项目目录执行以下命令，打包输出在 release/ 目录下：
 ```bash
-npm run dist:win
+git clone https://github.com/violettoolssite/codexProapi.git
+cd codexProapi
+npm install
+npm start
 ```
-若出现“Cannot create symbolic link”错误，请以管理员身份运行终端，或开启开发者模式（设置 -> 更新和安全 -> 开发者选项）后重试。
+
+访问 `http://localhost:1455` 添加账号。账号和配置保存在本地 `data/` 目录。
 
 ### 方式二：Docker Compose
 
