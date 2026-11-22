@@ -9,6 +9,7 @@ For Chinese documentation, please see README.zh-CN.md.
 ## Core Features
 
 - Multi-Account Round-Robin & Failover: Automatically rotates through configured accounts for requests. If one account fails, the proxy immediately retries the request using the next available account.
+- Block Accounts: Block an account from the account list. The persistent block excludes it from chat, image generation, model probes, usage checks, and automatic token refresh.
 - Independent Account Proxy: Allows configuring a separate proxy server (supporting HTTP, HTTPS, SOCKS) for each individual account. Calls to the Codex backend and token refresh operations will be routed through the bound proxy.
 - Token Auto Refresh: Periodically refreshes OAuth access tokens in the background based on a configurable interval (minimum 5 minutes). Restores failed or rate-limited accounts back to the active pool once their tokens are successfully refreshed.
 - Batch Account Import: Supports importing multiple accounts at once by uploading a text file (.txt) containing a list of Refresh Tokens (one per line) or directly pasting them into the batch import interface.

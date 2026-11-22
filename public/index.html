@@ -230,6 +230,7 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
                       <div class="flex items-center gap-2">
                         <span x-text="acc.name || ('账号 '+(acc.index+1))"></span>
                         <span x-show="getAccountUsage(acc)?.is_member" class="badge badge-info" x-text="getAccountUsage(acc)?.plan_label"></span>
+                        <span x-show="acc.blocked" class="badge badge-err">已屏蔽</span>
                       </div>
                       <div class="mono text-dim text-xs" x-text="acc.accountIdMask||''"></div>
                     </td>
@@ -243,6 +244,7 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
                       <span x-show="!accHealth[acc.accountIdMask]" class="text-dim text-xs">—</span>
                     </td>
                     <td>
+                      <button type="button" class="btn btn-sm" @click="toggleAccountBlocked(acc)" x-text="acc.blocked ? '解除屏蔽' : '屏蔽'"></button>
                       <button type="button" class="btn btn-sm" @click="editAccount(acc)">修改账号</button>
                       <button type="button" class="btn btn-sm btn-danger" @click="delAcc(acc.index)">删除</button>
                     </td>

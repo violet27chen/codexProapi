@@ -21,6 +21,7 @@ import {
   batchAddAccounts,
   updateAccountProxy,
   updateAccount,
+  setAccountBlocked,
 } from './accounts.js';
 import { getAuthorizeUrl, exchangeCodeForToken } from './oauth.js';
 import { getLocalCodexLoginStatus, startLocalCodexLogin } from './localCodexLogin.js';
@@ -130,10 +131,15 @@ function withDefaultModel(body) {
 }
 
 function refreshAuthProvider() {
-  const auths = loadAccountsForProxy();
+  const allAuths = loadAccountsForProxy({ includeBlocked: true });
+  const auths = allAuths.filter((auth) => !auth.blocked);
   if (auths.length > 0) {
     authProviderRef.current = createRoundRobinProvider(auths);
     return auths.length;
+  }
+  if (allAuths.length > 0) {
+    authProviderRef.current = () => null;
+    return 0;
   }
   authProviderRef.current = AUTH_PATH;
   return 0;
@@ -297,7 +303,7 @@ app.post('/v1/chat/completions', async (req, res) => {
   const body = withDefaultModel(req.body);
   if (!body.model) return res.status(503).json({ error: '暂无可用模型，请先添加账号并刷新模型目录' });
   const { accounts } = listAccountsForApi();
-  const accountCount = accounts.length || 1;
+  const accountCount = loadAccountsForProxy().length || 1;
   const usedAuth = await handleChatCompletions(body, res, getAuthProvider, accountCount);
   if (res._logMeta && usedAuth) {
     const mask = usedAuth.accountId ? usedAuth.accountId.slice(0, 8) + '…' : '—';
@@ -323,7 +329,7 @@ app.post('/v1/responses', async (req, res) => {
     });
   }
   const { accounts } = listAccountsForApi();
-  const accountCount = accounts.length || 1;
+  const accountCount = loadAccountsForProxy().length || 1;
   const usedAuth = await handleChatCompletions(body, res, getAuthProvider, accountCount, 'response');
   if (res._logMeta && usedAuth) {
     const mask = usedAuth.accountId ? usedAuth.accountId.slice(0, 8) + '…' : '—';
@@ -336,7 +342,7 @@ app.post('/chat/completions', async (req, res) => {
   const body = withDefaultModel(req.body);
   if (!body.model) return res.status(503).json({ error: '暂无可用模型，请先添加账号并刷新模型目录' });
   const { accounts } = listAccountsForApi();
-  const accountCount = accounts.length || 1;
+  const accountCount = loadAccountsForProxy().length || 1;
   const usedAuth = await handleChatCompletions(body, res, getAuthProvider, accountCount);
   if (res._logMeta && usedAuth) {
     const mask = usedAuth.accountId ? usedAuth.accountId.slice(0, 8) + '…' : '—';
@@ -353,7 +359,7 @@ app.post('/v1/messages', async (req, res) => {
     return res.status(400).json({ error: 'messages 不能为空' });
   }
   const { accounts } = listAccountsForApi();
-  const accountCount = accounts.length || 1;
+  const accountCount = loadAccountsForProxy().length || 1;
   const usedAuth = await handleChatCompletions(body, res, getAuthProvider, accountCount);
   if (res._logMeta && usedAuth) {
     const mask = usedAuth.accountId ? usedAuth.accountId.slice(0, 8) + '…' : '—';
@@ -367,7 +373,7 @@ app.post('/responses', async (req, res) => {
   const body = withDefaultModel(req.body);
   if (!body.model) return res.status(503).json({ error: '暂无可用模型，请先添加账号并刷新模型目录' });
   const { accounts } = listAccountsForApi();
-  const accountCount = accounts.length || 1;
+  const accountCount = loadAccountsForProxy().length || 1;
   const usedAuth = await handleChatCompletions(body, res, getAuthProvider, accountCount);
   if (res._logMeta && usedAuth) {
     const mask = usedAuth.accountId ? usedAuth.accountId.slice(0, 8) + '…' : '—';
@@ -550,6 +556,16 @@ app.put('/api/accounts/:index/proxy', (req, res) => {
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
+  }
+});
+
+app.put('/api/accounts/:index/blocked', (req, res) => {
+  try {
+    const result = setAccountBlocked(req.params.index, req.body?.blocked);
+    refreshAuthProvider();
+    res.json(result);
+  } catch (e) {
+    res.status(400).json({ error: e.message });
   }
 });
 

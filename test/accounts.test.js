@@ -3,7 +3,39 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { addAccount, addLocalCodexAccount, batchAddAccounts, updateAccount } from '../src/accounts.js';
+import {
+  addAccount,
+  addLocalCodexAccount,
+  batchAddAccounts,
+  listAccountsForApi,
+  loadAccountsForProxy,
+  setAccountBlocked,
+  updateAccount,
+} from '../src/accounts.js';
+
+test('blocked accounts persist and are excluded from proxy account loading', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'codex-proapi-'));
+  const accountsPath = join(dir, 'accounts.json');
+  const previousAccountsPath = process.env.CODEX_ACCOUNTS_FILE;
+  process.env.CODEX_ACCOUNTS_FILE = accountsPath;
+
+  try {
+    addAccount({ access_token: 'access-1', account_id: 'account-1' });
+    addAccount({ access_token: 'access-2', account_id: 'account-2' });
+
+    assert.deepEqual(setAccountBlocked(0, true), { ok: true, blocked: true });
+    assert.deepEqual(loadAccountsForProxy().map((account) => account.accountId), ['account-2']);
+    assert.equal(listAccountsForApi().accounts[0].blocked, true);
+
+    setAccountBlocked(0, false);
+    assert.deepEqual(loadAccountsForProxy().map((account) => account.accountId), ['account-1', 'account-2']);
+    assert.throws(() => setAccountBlocked(2, true), /未找到指定账号/);
+  } finally {
+    if (previousAccountsPath === undefined) delete process.env.CODEX_ACCOUNTS_FILE;
+    else process.env.CODEX_ACCOUNTS_FILE = previousAccountsPath;
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 test('addAccount updates an existing account instead of duplicating it', () => {
   const dir = mkdtempSync(join(tmpdir(), 'codex-proapi-'));

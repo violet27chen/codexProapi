@@ -748,7 +748,15 @@ export async function pipeStreamToResponses(backendStream, res, model, opts = {}
  * 解析认证：authProvider 可为路径字符串、auth 对象、或 () => auth 的 getter
  */
 function resolveAuth(authProvider) {
-  if (typeof authProvider === 'function') return authProvider();
+  if (typeof authProvider === 'function') {
+    const auth = authProvider();
+    if (!auth) {
+      const error = new Error('没有未屏蔽且可用的 Codex 账号');
+      error.code = 'NO_ACTIVE_ACCOUNTS';
+      throw error;
+    }
+    return auth;
+  }
   if (authProvider && typeof authProvider === 'object' && authProvider.accessToken) return authProvider;
   return loadAuth(authProvider);
 }
@@ -930,7 +938,7 @@ export async function handleChatCompletions(
     if (msg === 'fetch failed' || /^fetch failed/i.test(msg)) {
       msg = 'fetch failed: 无法连接 Codex 后端 (chatgpt.com)。请检查网络/VPN，并确认已添加至少一个 Codex 账号。详见配置页或 README。';
     }
-    res.status(500).json({
+    res.status(lastError?.code === 'NO_ACTIVE_ACCOUNTS' ? 503 : 500).json({
       error: {
         message: msg,
         type: 'proxy_error',

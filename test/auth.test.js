@@ -27,3 +27,13 @@ test('createRoundRobinProvider skips accounts marked unavailable', () => {
     unmarkAccountUnavailable(auths[0].accountId);
   }
 });
+
+test('createRoundRobinProvider does not fall back to unavailable accounts', () => {
+  const accountId = 'round-robin-all-unavailable';
+  markAccountUnavailable(accountId);
+  try {
+    assert.equal(createRoundRobinProvider([{ accountId, accessToken: 'token' }])(), null);
+  } finally {
+    unmarkAccountUnavailable(accountId);
+  }
+});

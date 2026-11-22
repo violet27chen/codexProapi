@@ -64,6 +64,12 @@ export async function refreshAllAccounts() {
       const accountId = acc.account_id || acc.tokens?.account_id || `idx-${i}`;
       const mask = accountId.length > 12 ? accountId.slice(0, 12) + '…' : accountId;
 
+      if (acc.blocked === true) {
+        summary.skipped++;
+        summary.details.push({ accountId, mask, status: 'blocked' });
+        continue;
+      }
+
       if (!refreshToken) {
         summary.skipped++;
         summary.details.push({ accountId, mask, status: 'no_refresh_token' });

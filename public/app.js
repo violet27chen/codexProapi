@@ -402,6 +402,23 @@ ${auth}  -d '${JSON.stringify(body)}'`;
                 d.ok ? (this.toast2('账号已删除', 'success'), await this.loadAccounts()) : this.toast2('删除失败', 'error');
             } catch { this.toast2('删除失败', 'error'); }
         },
+        async toggleAccountBlocked(account) {
+            const blocked = !account.blocked;
+            try {
+                const r = await fetch(`/api/accounts/${account.index}/blocked`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ blocked }),
+                });
+                const d = await r.json();
+                if (!r.ok || !d.ok) throw new Error(d.error || '更新屏蔽状态失败');
+                this.toast2(blocked ? '账号已屏蔽，不会再用于请求' : '账号已解除屏蔽', 'success');
+                await this.loadAccounts();
+                await this.loadModels();
+            } catch (e) {
+                this.toast2('更新账号状态失败：' + e.message, 'error');
+            }
+        },
         /* ── token refresh ── */
         async loadRefreshStatus() {
             try {

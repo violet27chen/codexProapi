@@ -63,6 +63,7 @@ export function listAccountsForApi() {
         source: item.source || 'manual',
         tokenExp,
         hasRefreshToken: !!(item.refresh_token || item.tokens?.refresh_token),
+        blocked: item.blocked === true,
         proxy: item.proxy || null, // 原始代理 URL
         proxyDisplay: formatProxyDisplay(item.proxy), // 格式化展示用代理
       };
@@ -73,7 +74,7 @@ export function listAccountsForApi() {
 /**
  * 读取完整账号列表（含 token），供代理轮询使用
  */
-export function loadAccountsForProxy() {
+export function loadAccountsForProxy({ includeBlocked = false } = {}) {
   const path = getAccountsPath();
   if (!existsSync(path)) return [];
   const raw = readFileSync(path, 'utf8');
@@ -81,6 +82,7 @@ export function loadAccountsForProxy() {
   const list = Array.isArray(data) ? data : (data.accounts || []);
   const auths = [];
   for (const [index, item] of list.entries()) {
+    if (!includeBlocked && item.blocked === true) continue;
     const tokens = item.tokens || (item.access_token ? { access_token: item.access_token, account_id: item.account_id } : null);
     if (tokens?.access_token && tokens?.account_id) {
       auths.push({
@@ -90,10 +92,26 @@ export function loadAccountsForProxy() {
         name: item.name || null,
         proxyUrl: item.proxy || null, // 代理 URL
         index,
+        blocked: item.blocked === true,
       });
     }
   }
   return auths;
+}
+
+export function setAccountBlocked(index, blocked) {
+  if (typeof blocked !== 'boolean') throw new Error('屏蔽状态必须为布尔值');
+  const path = getAccountsPath();
+  if (!existsSync(path)) throw new Error('账号文件不存在');
+  const data = JSON.parse(readFileSync(path, 'utf8'));
+  const list = Array.isArray(data) ? data : (data.accounts || []);
+  const accountIndex = Number(index);
+  if (!Number.isInteger(accountIndex) || accountIndex < 0 || accountIndex >= list.length) {
+    throw new Error('未找到指定账号');
+  }
+  list[accountIndex].blocked = blocked;
+  writeFileSync(path, JSON.stringify({ accounts: list }, null, 2), 'utf8');
+  return { ok: true, blocked };
 }
 
 /**

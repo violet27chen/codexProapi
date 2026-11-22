@@ -78,9 +78,7 @@ export function createRoundRobinProvider(auths) {
       nextIndex = (index + 1) % auths.length;
       return auths[index];
     }
-    const auth = auths[nextIndex];
-    nextIndex = (nextIndex + 1) % auths.length;
-    return auth;
+    return null;
   };
 }
 
