@@ -287,6 +287,22 @@ async function buildResponsesRequest(openaiReq, proxyUrl) {
 /**
  * 非流式：从 SSE 响应中收集完整文本后返回
  */
+function extractCompletedOutputText(event) {
+  if (event.type === 'response.output_text.done' && typeof event.text === 'string') {
+    return event.text;
+  }
+  const output = event.type === 'response.output_item.done'
+    ? [event.item]
+    : event.type === 'response.completed'
+      ? event.response?.output
+      : [];
+  return (output || [])
+    .flatMap((item) => item?.content || [])
+    .filter((part) => part?.type === 'output_text' && typeof part.text === 'string')
+    .map((part) => part.text)
+    .join('');
+}
+
 export async function parseStreamToText(stream) {
   const reader = stream.getReader();
   const dec = new TextDecoder();
@@ -308,6 +324,8 @@ export async function parseStreamToText(stream) {
           // 只从 delta 收集，避免与 output_item.done 重复
           if (type === 'response.output_text.delta' && event.delta) {
             fullText += event.delta;
+          } else if (!fullText) {
+            fullText = extractCompletedOutputText(event);
           }
         } catch (_) {}
       }
@@ -344,6 +362,13 @@ export function pipeStreamToOpenAI(backendStream, res, model, id, opts = {}) {
       choices: [choice],
     });
   };
+  const sendTextIfMissing = (text) => {
+    if (completionChars || !String(text || '').trim()) return;
+    completionChars = String(text).length;
+    sendDelta({ role: 'assistant' });
+    hasSentRole = true;
+    sendDelta({ content: text });
+  };
   const reader = backendStream.getReader();
   return (async () => {
     try {
@@ -377,6 +402,8 @@ export function pipeStreamToOpenAI(backendStream, res, model, id, opts = {}) {
                 hasSentRole = true;
               }
               sendDelta({ content: event.delta });
+            } else if (!completionChars) {
+              sendTextIfMissing(extractCompletedOutputText(event));
             }
           } catch (_) {}
         }
@@ -571,6 +598,19 @@ export async function pipeStreamToResponses(backendStream, res, model, opts = {}
               content_index: 0,
               delta,
             });
+          } else if (!text) {
+            const completedText = extractCompletedOutputText(event);
+            if (completedText.trim()) {
+              start();
+              text = completedText;
+              emit({
+                type: 'response.output_text.delta',
+                item_id: messageId,
+                output_index: 0,
+                content_index: 0,
+                delta: completedText,
+              });
+            }
           }
         } catch (_) {}
       }

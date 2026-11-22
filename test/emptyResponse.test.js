@@ -52,3 +52,24 @@ test('stream converters reject empty completions before sending a response', asy
     assert.deepEqual(res.writes, []);
   }
 });
+
+test('response parsers recover text emitted only in completed events', async () => {
+  const completedEvents = [
+    { type: 'response.output_text.done', text: 'Finished text' },
+  ];
+  assert.equal(await parseStreamToText(sseStream(completedEvents)), 'Finished text');
+
+  for (const convert of [
+    (stream, res) => pipeStreamToOpenAI(stream, res, 'test-model', 'test-id'),
+    (stream, res) => pipeStreamToResponses(stream, res, 'test-model'),
+  ]) {
+    const res = mockResponse();
+    await convert(sseStream([{
+      type: 'response.completed',
+      response: {
+        output: [{ content: [{ type: 'output_text', text: 'Finished text' }] }],
+      },
+    }]), res);
+    assert.ok(res.writes.some((chunk) => chunk.includes('Finished text')));
+  }
+});
