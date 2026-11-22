@@ -13,8 +13,9 @@ function app() {
         usageData: [],
         models: [],
         modelsLastProbed: 0,
+        modelsCatalogError: '',
         logs: [],
-        cfg: { api_key: '', token_refresh_interval_minutes: 60 },
+        cfg: { api_key: '', default_model: '', token_refresh_interval_minutes: 60 },
         refreshStatus: { active: false, intervalMinutes: 60, lastRun: 0, lastSummary: null, isRefreshing: false },
         showKey: false,
         showAdd: false,
@@ -44,6 +45,9 @@ function app() {
         get availableModelsCount() {
             return this.models.filter(m => m.available === true).length;
         },
+        get selectableModels() {
+            return this.models.filter(m => m.type === 'text' && m.available !== false);
+        },
         get todayReqs() {
             const d = new Date().toISOString().slice(0, 10);
             return this.logs.filter(l => l.type === 'request' && l.time && l.time.startsWith(d)).length;
@@ -54,9 +58,11 @@ function app() {
         get curlExample() {
             const k = this.cfg.api_key;
             const auth = k ? `\n  -H "Authorization: Bearer ${k}" \\` : '';
+            const body = { messages: [{ role: 'user', content: '你好' }] };
+            if (this.cfg.default_model) body.model = this.cfg.default_model;
             return `curl http://localhost:1455/v1/chat/completions \\
   -H "Content-Type: application/json" \\${auth}
-  -d '{"model":"gpt-5.3-codex","messages":[{"role":"user","content":"你好"}]}'`;
+  -d '${JSON.stringify(body)}'`;
         },
 
         /* ── init ── */
@@ -127,19 +133,25 @@ function app() {
                 const d = await (await fetch('/api/models')).json();
                 this.models = d.models || [];
                 this.modelsLastProbed = d.lastProbed || 0;
+                this.modelsCatalogError = d.catalogError || '';
             } catch {} finally { this.loading.models = false; }
         },
         async doRefreshModels() {
             this.loading.models = true;
-            this.toast2('探测进行中，需 10-30 秒…', 'info');
+            this.toast2('正在获取模型目录并探测可用性…', 'info');
             try {
                 const r = await fetch('/api/models/refresh', { method: 'POST' });
                 const d = await r.json();
                 if (r.ok) {
                     this.models = d.models || [];
                     this.modelsLastProbed = d.lastProbed || 0;
+                    this.modelsCatalogError = d.catalogError || '';
                     const ok = this.models.filter(m => m.available === true).length;
-                    this.toast2(`探测完成：${ok}/${this.models.length} 可用`, 'success');
+                    if (this.modelsCatalogError) {
+                        this.toast2('模型目录获取失败：' + this.modelsCatalogError, 'error');
+                    } else {
+                        this.toast2(`探测完成：${ok}/${this.models.length} 可用`, 'success');
+                    }
                 } else {
                     this.toast2('探测失败：' + (d.error || ''), 'error');
                 }
@@ -168,6 +180,7 @@ function app() {
                 if (d.ok) {
                     this.cfg = {
                         api_key: d.api_key || '',
+                        default_model: d.default_model || '',
                         token_refresh_interval_minutes: d.token_refresh_interval_minutes || 60,
                     };
                     this.toast2('设置已保存', 'success');

@@ -157,7 +157,7 @@ async function buildResponsesRequest(openaiReq, proxyUrl) {
     tool_choice = 'auto';
   }
   return {
-    model: openaiReq.model || 'gpt-5.3-codex',
+    model: openaiReq.model,
     instructions: 'You are a helpful AI assistant. Provide clear, accurate, and concise responses.',
     input: await messagesToInput(openaiReq.messages || [], proxyUrl),
     tools,
@@ -364,7 +364,6 @@ export async function callCodexBackend(openaiReq, authProvider = null) {
  */
 export async function handleChatCompletions(openaiReq, res, authProvider = null, accountCount = 1) {
   const stream = openaiReq.stream === true;
-  const model = openaiReq.model || 'gpt-5.3-codex';
   const id = `chatcmpl-${randomUUID().replace(/-/g, '')}`;
   const maxTries = Math.max(1, Number(accountCount) || 1);
   let lastError = null;

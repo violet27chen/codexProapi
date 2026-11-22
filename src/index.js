@@ -22,6 +22,7 @@ import { getRemainingPct, getUsedTokens, QUOTA } from './usageTracker.js';
 import { generateImage, getCachedImage, fetchImageBytes } from './imagegen.js';
 import {
   getAvailableModelsOpenAI,
+  getDefaultChatModel,
   getModelsStatus,
   refreshModels,
   initialProbe,
@@ -53,13 +54,14 @@ function loadConfig() {
     const j = JSON.parse(raw);
     return {
       api_key: typeof j.api_key === 'string' ? j.api_key : '',
+      default_model: typeof j.default_model === 'string' ? j.default_model : '',
       token_refresh_interval_minutes:
         Number.isFinite(Number(j.token_refresh_interval_minutes))
           ? Math.max(5, Number(j.token_refresh_interval_minutes))
           : 60,
     };
   } catch {
-    return { api_key: '', token_refresh_interval_minutes: 60 };
+    return { api_key: '', default_model: '', token_refresh_interval_minutes: 60 };
   }
 }
 function saveConfig(obj) {
@@ -68,6 +70,7 @@ function saveConfig(obj) {
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   const out = {
     api_key: obj.api_key ?? '',
+    default_model: typeof obj.default_model === 'string' ? obj.default_model.trim() : '',
     token_refresh_interval_minutes:
       Number.isFinite(Number(obj.token_refresh_interval_minutes))
         ? Math.max(5, Number(obj.token_refresh_interval_minutes))
@@ -108,6 +111,15 @@ function getAuthProvider() {
   return loadAuth(p);
 }
 
+function withDefaultModel(body) {
+  const requestedModel = typeof body?.model === 'string' ? body.model.trim() : '';
+  const configuredModel = loadConfig().default_model;
+  return {
+    ...(body && typeof body === 'object' ? body : {}),
+    model: requestedModel || configuredModel || getDefaultChatModel(),
+  };
+}
+
 function refreshAuthProvider() {
   const auths = loadAccountsForProxy();
   if (auths.length > 0) {
@@ -137,7 +149,7 @@ try {
 });
 app.put('/api/config', (req, res) => {
   const { api_key } = req.body || {};
-  saveConfig({ api_key: typeof api_key === 'string' ? api_key : '' });
+  saveConfig({ ...loadConfig(), api_key: typeof api_key === 'string' ? api_key : '' });
   res.json({ ok: true });
 });
   app.get('/api/version', (req, res) => res.json({ version: pkg.version || '0.0.0' }));
@@ -270,9 +282,11 @@ app.get('/api/accounts/health', async (req, res) => {
 });
 
 app.post('/v1/chat/completions', async (req, res) => {
+  const body = withDefaultModel(req.body);
+  if (!body.model) return res.status(503).json({ error: '暂无可用模型，请先添加账号并刷新模型目录' });
   const { accounts } = listAccountsForApi();
   const accountCount = accounts.length || 1;
-  const usedAuth = await handleChatCompletions(req.body, res, getAuthProvider, accountCount);
+  const usedAuth = await handleChatCompletions(body, res, getAuthProvider, accountCount);
   if (res._logMeta && usedAuth) {
     const mask = usedAuth.accountId ? usedAuth.accountId.slice(0, 8) + '…' : '—';
     const found = accounts.find((a) => a.accountIdMask === mask);
@@ -281,9 +295,11 @@ app.post('/v1/chat/completions', async (req, res) => {
 });
 
 app.post('/chat/completions', async (req, res) => {
+  const body = withDefaultModel(req.body);
+  if (!body.model) return res.status(503).json({ error: '暂无可用模型，请先添加账号并刷新模型目录' });
   const { accounts } = listAccountsForApi();
   const accountCount = accounts.length || 1;
-  const usedAuth = await handleChatCompletions(req.body, res, getAuthProvider, accountCount);
+  const usedAuth = await handleChatCompletions(body, res, getAuthProvider, accountCount);
   if (res._logMeta && usedAuth) {
     const mask = usedAuth.accountId ? usedAuth.accountId.slice(0, 8) + '…' : '—';
     const found = accounts.find((a) => a.accountIdMask === mask);
@@ -293,9 +309,11 @@ app.post('/chat/completions', async (req, res) => {
 
 // 兼容将 Base URL 设为根且请求 /responses 的客户端（如部分 ChatGPT 风格客户端）
 app.post('/responses', async (req, res) => {
+  const body = withDefaultModel(req.body);
+  if (!body.model) return res.status(503).json({ error: '暂无可用模型，请先添加账号并刷新模型目录' });
   const { accounts } = listAccountsForApi();
   const accountCount = accounts.length || 1;
-  const usedAuth = await handleChatCompletions(req.body, res, getAuthProvider, accountCount);
+  const usedAuth = await handleChatCompletions(body, res, getAuthProvider, accountCount);
   if (res._logMeta && usedAuth) {
     const mask = usedAuth.accountId ? usedAuth.accountId.slice(0, 8) + '…' : '—';
     const found = accounts.find((a) => a.accountIdMask === mask);
@@ -441,6 +459,7 @@ app.patch('/api/settings', (req, res) => {
     const current = loadConfig();
     const oldInterval = current.token_refresh_interval_minutes;
     if (typeof req.body?.api_key === 'string') current.api_key = req.body.api_key;
+    if (typeof req.body?.default_model === 'string') current.default_model = req.body.default_model.trim();
     if (req.body?.token_refresh_interval_minutes != null) {
       const v = Math.max(5, Number(req.body.token_refresh_interval_minutes) || 60);
       current.token_refresh_interval_minutes = v;
@@ -599,7 +618,7 @@ function startServer() {
     console.log('   健康检查: http://localhost:' + PORT + '/health');
     console.log('   OAuth 回调（绑定 API 用）: ' + oauthRedirect + (process.env.PUBLIC_URL || process.env.OAUTH_REDIRECT_URI ? ' (已用 PUBLIC_URL/OAUTH_REDIRECT_URI)' : ' (若绑定时 403 请设置 PUBLIC_URL)'));
     console.log('   对话接口: http://localhost:' + PORT + '/v1/chat/completions');
-    console.log('   建议模型: gpt-5.3-codex\n');
+    console.log('   默认模型可在系统设置中选择，也可由请求指定\n');
   });
 
   setInterval(() => {
