@@ -1,9 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  parseStreamToCompletion,
   parseStreamToText,
   pipeStreamToOpenAI,
   pipeStreamToResponses,
+  messagesToInput,
 } from '../src/proxy.js';
 
 function sseStream(events) {
@@ -72,4 +74,64 @@ test('response parsers recover text emitted only in completed events', async () 
     }]), res);
     assert.ok(res.writes.some((chunk) => chunk.includes('Finished text')));
   }
+});
+
+test('function-call-only responses are returned as OpenAI tool calls', async () => {
+  const result = await parseStreamToCompletion(sseStream([
+    {
+      type: 'response.output_item.added',
+      output_index: 0,
+      item: { id: 'item_1', type: 'function_call', call_id: 'call_1', name: 'list_files', arguments: '' },
+    },
+    { type: 'response.function_call_arguments.delta', output_index: 0, delta: '{"path":' },
+    { type: 'response.function_call_arguments.delta', output_index: 0, delta: '"/repo"}' },
+    { type: 'response.function_call_arguments.done', output_index: 0, arguments: '{"path":"/repo"}' },
+  ]));
+
+  assert.equal(result.text, '');
+  assert.deepEqual(result.toolCalls, [{
+    id: 'call_1',
+    type: 'function',
+    function: { name: 'list_files', arguments: '{"path":"/repo"}' },
+  }]);
+});
+
+test('stream converter returns function calls instead of treating them as empty output', async () => {
+  const res = mockResponse();
+  await pipeStreamToOpenAI(sseStream([{
+    type: 'response.completed',
+    response: {
+      output: [{
+        type: 'function_call',
+        call_id: 'call_1',
+        name: 'list_files',
+        arguments: '{"path":"/repo"}',
+      }],
+    },
+  }]), res, 'test-model', 'test-id');
+
+  assert.ok(res.writes.some((chunk) => chunk.includes('"finish_reason":"tool_calls"')));
+  assert.ok(res.writes.some((chunk) => chunk.includes('"name":"list_files"')));
+});
+
+test('tool results are serialized as function-call input items for the next turn', async () => {
+  const input = await messagesToInput([
+    {
+      role: 'assistant',
+      content: null,
+      tool_calls: [{
+        id: 'call_1',
+        type: 'function',
+        function: { name: 'list_files', arguments: '{"path":"/repo"}' },
+      }],
+    },
+    { role: 'tool', tool_call_id: 'call_1', content: '["src"]' },
+    { role: 'user', content: 'Open src/index.js' },
+  ]);
+
+  assert.deepEqual(input.slice(0, 2), [
+    { type: 'function_call', call_id: 'call_1', name: 'list_files', arguments: '{"path":"/repo"}' },
+    { type: 'function_call_output', call_id: 'call_1', output: '["src"]' },
+  ]);
+  assert.equal(input[2].type, 'message');
 });

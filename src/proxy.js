@@ -66,18 +66,50 @@ async function getMessageContentParts(msg, proxyUrl) {
   return content;
 }
 
-async function messagesToInput(messages, proxyUrl) {
-  const parts = [];
-  let hasImage = false;
+export async function messagesToInput(messages, proxyUrl) {
+  const input = [];
   const textLines = [];
+  const pendingImages = [];
+  const flushText = () => {
+    const content = [];
+    const fullText = textLines.join('\n').trim();
+    if (fullText) content.push({ type: 'input_text', text: fullText });
+    content.push(...pendingImages.splice(0));
+    if (content.length) input.push({ type: 'message', role: 'user', content });
+    textLines.length = 0;
+  };
 
   for (const msg of messages) {
     const role = String(msg.role || 'user').toLowerCase();
-    const contentParts = await getMessageContentParts(msg, proxyUrl);
-    if (contentParts.length === 0) continue;
+    if (role === 'tool') {
+      flushText();
+      input.push({
+        type: 'function_call_output',
+        call_id: msg.tool_call_id,
+        output: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content ?? ''),
+      });
+      continue;
+    }
 
+    const contentParts = await getMessageContentParts(msg, proxyUrl);
     const texts = contentParts.filter((p) => p.type === 'text').map((p) => p.text);
-    const images = contentParts.filter((p) => p.type === 'image_url');
+    const imageParts = contentParts.filter((p) => p.type === 'image_url');
+
+    if (role === 'assistant' && Array.isArray(msg.tool_calls) && msg.tool_calls.length) {
+      if (texts.length) textLines.push(`Assistant: ${texts.join(' ')}`);
+      flushText();
+      for (const toolCall of msg.tool_calls) {
+        const fn = toolCall.function || {};
+        input.push({
+          type: 'function_call',
+          call_id: toolCall.id,
+          name: fn.name || '',
+          arguments: typeof fn.arguments === 'string' ? fn.arguments : JSON.stringify(fn.arguments || {}),
+        });
+      }
+      continue;
+    }
+    if (contentParts.length === 0) continue;
 
     if (role === 'assistant') {
       textLines.push(`Assistant: ${texts.join(' ')}`);
@@ -90,16 +122,13 @@ async function messagesToInput(messages, proxyUrl) {
     // user
     if (textLines.length) textLines.push('');
     textLines.push(`User: ${texts.join(' ')}`);
-    for (const img of images) {
-      hasImage = true;
-      parts.push({ type: 'input_image', image_url: img.url, detail: img.detail || 'auto' });
+    for (const img of imageParts) {
+      pendingImages.push({ type: 'input_image', image_url: img.url, detail: img.detail || 'auto' });
     }
   }
 
-  const fullText = textLines.join('\n').trim();
-  if (fullText) parts.unshift({ type: 'input_text', text: fullText });
-  if (parts.length === 0) return [];
-  return [{ type: 'message', role: 'user', content: parts }];
+  flushText();
+  return input;
 }
 
 /** 官方标准：约 4 字符 = 1 token，用于估算 prompt_tokens */
@@ -304,11 +333,69 @@ function extractCompletedOutputText(event) {
     .join('');
 }
 
-export async function parseStreamToText(stream) {
+function createFunctionCallCollector() {
+  const calls = new Map();
+  const getCall = (item = {}, index) => {
+    const key = String(index ?? item.id ?? item.call_id ?? calls.size);
+    if (!calls.has(key)) {
+      calls.set(key, {
+        index: Number.isFinite(Number(index)) ? Number(index) : calls.size,
+        id: item.call_id || item.id || '',
+        name: item.name || '',
+        arguments: '',
+      });
+    }
+    const call = calls.get(key);
+    if (item.call_id) call.id = item.call_id;
+    if (item.id && !call.id) call.id = item.id;
+    if (item.name) call.name = item.name;
+    if (typeof item.arguments === 'string' && item.arguments) call.arguments = item.arguments;
+    return call;
+  };
+
+  const collectItem = (item, index) => {
+    if (item?.type !== 'function_call') return;
+    getCall(item, index);
+  };
+
+  return {
+    add(event) {
+      if (event.type === 'response.output_item.added' || event.type === 'response.output_item.done') {
+        collectItem(event.item, event.output_index);
+      } else if (event.type === 'response.function_call_arguments.delta') {
+        const call = getCall({}, event.output_index);
+        call.arguments += String(event.delta || '');
+      } else if (event.type === 'response.function_call_arguments.done') {
+        const call = getCall({}, event.output_index);
+        if (typeof event.arguments === 'string') call.arguments = event.arguments;
+      } else if (event.type === 'response.completed') {
+        for (const [index, item] of (event.response?.output || []).entries()) {
+          collectItem(item, index);
+        }
+      }
+    },
+    getCalls() {
+      return [...calls.values()]
+        .sort((a, b) => a.index - b.index)
+        .map((call) => ({
+          id: call.id || `call_${randomUUID().replace(/-/g, '')}`,
+          type: 'function',
+          function: {
+            name: call.name,
+            arguments: call.arguments || '{}',
+          },
+        }));
+    },
+  };
+}
+
+export async function parseStreamToCompletion(stream) {
   const reader = stream.getReader();
   const dec = new TextDecoder();
   let fullText = '';
+  const functionCalls = createFunctionCallCollector();
   const parseEvent = (event) => {
+    functionCalls.add(event);
     if (event.type === 'response.output_text.delta' && event.delta) {
       fullText += event.delta;
     } else if (!fullText) {
@@ -322,12 +409,17 @@ export async function parseStreamToText(stream) {
     parseChunk(dec.decode(value, { stream: true }));
   }
   parseChunk(dec.decode(), true);
-  if (!fullText.trim()) {
+  const toolCalls = functionCalls.getCalls();
+  if (!fullText.trim() && toolCalls.length === 0) {
     const error = new Error('model returned a completed response with no content');
     error.code = 'EMPTY_MODEL_RESPONSE';
     throw error;
   }
-  return fullText;
+  return { text: fullText, toolCalls };
+}
+
+export async function parseStreamToText(stream) {
+  return (await parseStreamToCompletion(stream)).text;
 }
 
 /**
@@ -339,6 +431,7 @@ export function pipeStreamToOpenAI(backendStream, res, model, id, opts = {}) {
   let hasSentRole = false;
   let completionChars = 0;
   let doneReceived = false;
+  const functionCalls = createFunctionCallCollector();
   const onFinish = opts.onFinish || (() => {});
   const sendChunk = (obj) => {
     res.write(`data: ${JSON.stringify(obj)}\n\n`);
@@ -364,14 +457,25 @@ export function pipeStreamToOpenAI(backendStream, res, model, id, opts = {}) {
   return (async () => {
     try {
       const parseEvent = (event) => {
+        functionCalls.add(event);
         if (event.type === '[DONE]') {
-          if (!completionChars) {
+          const toolCalls = functionCalls.getCalls();
+          if (!completionChars && toolCalls.length === 0) {
             const error = new Error('model returned a completed response with no content');
             error.code = 'EMPTY_MODEL_RESPONSE';
             throw error;
           }
-          onFinish(completionChars);
-          sendDelta({}, 'stop');
+          const toolChars = toolCalls.reduce((sum, call) => sum + call.function.arguments.length, 0);
+          onFinish(completionChars + toolChars);
+          if (toolCalls.length) {
+            sendDelta({
+              ...(!hasSentRole ? { role: 'assistant' } : {}),
+              tool_calls: toolCalls.map((call, index) => ({ ...call, index })),
+            }, 'tool_calls');
+            hasSentRole = true;
+          } else {
+            sendDelta({}, 'stop');
+          }
           res.write('data: [DONE]\n\n');
           doneReceived = true;
           return;
@@ -396,13 +500,23 @@ export function pipeStreamToOpenAI(backendStream, res, model, id, opts = {}) {
       }
       parseChunk(dec.decode(), true);
       if (doneReceived) return;
-      if (!completionChars) {
+      const toolCalls = functionCalls.getCalls();
+      if (!completionChars && toolCalls.length === 0) {
         const error = new Error('model returned a completed response with no content');
         error.code = 'EMPTY_MODEL_RESPONSE';
         throw error;
       }
-      onFinish(completionChars);
-      sendDelta({}, 'stop');
+      const toolChars = toolCalls.reduce((sum, call) => sum + call.function.arguments.length, 0);
+      onFinish(completionChars + toolChars);
+      if (toolCalls.length) {
+        sendDelta({
+          ...(!hasSentRole ? { role: 'assistant' } : {}),
+          tool_calls: toolCalls.map((call, index) => ({ ...call, index })),
+        }, 'tool_calls');
+        hasSentRole = true;
+      } else {
+        sendDelta({}, 'stop');
+      }
       res.write('data: [DONE]\n\n');
     } catch (e) {
       if (e.code === 'EMPTY_MODEL_RESPONSE' && !hasSentRole) throw e;
@@ -751,8 +865,10 @@ export async function handleChatCompletions(
         }
         return who ?? null;
       }
-      const text = await parseStreamToText(backendRes.body);
-      const completionTokens = Math.ceil(text.length / 4);
+      const { text, toolCalls } = await parseStreamToCompletion(backendRes.body);
+      const completionTokens = Math.ceil(
+        (text.length + toolCalls.reduce((sum, call) => sum + call.function.arguments.length, 0)) / 4
+      );
       if (who?.accountId) {
         recordUsage(who.accountId, { prompt_tokens: promptTokens, completion_tokens: completionTokens });
       }
@@ -764,8 +880,12 @@ export async function handleChatCompletions(
         choices: [
           {
             index: 0,
-            message: { role: 'assistant', content: text },
-            finish_reason: 'stop',
+            message: {
+              role: 'assistant',
+              content: text || null,
+              ...(toolCalls.length ? { tool_calls: toolCalls } : {}),
+            },
+            finish_reason: toolCalls.length ? 'tool_calls' : 'stop',
           },
         ],
         usage: { prompt_tokens: promptTokens, completion_tokens: completionTokens, total_tokens: promptTokens + completionTokens },
