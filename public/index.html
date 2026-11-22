@@ -36,7 +36,7 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
           仪表盘
         </div>
-        <div class="nav-item" :class="page==='accounts'&&'active'" @click="page='accounts'; loadAccounts()">
+        <div class="nav-item" :class="page==='accounts'&&'active'" @click="page='accounts'; loadAccounts(); loadUsage()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
           账号管理
           <span x-show="accounts.length>0" class="badge badge-info ml-auto" x-text="accounts.length"></span>
@@ -54,7 +54,7 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
           请求日志
         </div>
-        <div class="nav-item" :class="page==='settings'&&'active'" @click="page='settings'; loadSettings()">
+        <div class="nav-item" :class="page==='settings'&&'active'" @click="page='settings'; loadSettings(); loadModels()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
           系统设置
         </div>
@@ -79,6 +79,14 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
             <button type="button" class="btn" @click="checkAccountsHealth()" :class="{'btn-loading':loading.health}">
               <svg x-show="loading.health" class="spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.22-8.56"/></svg>
               健康检查
+            </button>
+            <button type="button" class="btn" @click="startLocalCodexLogin()" :disabled="loading.localCodexLogin" :class="{'btn-loading':loading.localCodexLogin}">
+              <svg x-show="loading.localCodexLogin" class="spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.22-8.56"/></svg>
+              本机 Codex 登录并添加
+            </button>
+            <button type="button" class="btn" @click="importLocalCodex()" :disabled="loading.localCodex" :class="{'btn-loading':loading.localCodex}">
+              <svg x-show="loading.localCodex" class="spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.22-8.56"/></svg>
+              导入已有登录
             </button>
             <button type="button" class="btn" @click="showBatchImport=true; batchImportText=''; batchImportResults=null">批量导入</button>
             <button type="button" class="btn btn-primary" @click="showAdd=true; resetAddForm()">+ 添加账号</button>
@@ -145,9 +153,31 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
         </div>
 
         <div class="card">
-          <div class="card-title">调用示例</div>
+          <div class="card-title">OpenAI Chat Completions 调用示例</div>
+          <div class="text-muted text-xs mono">POST /v1/chat/completions · Base URL: http://localhost:1455/v1</div>
           <pre class="code-block" x-text="curlExample"></pre>
           <button type="button" class="btn btn-sm mt-2" @click="copyTxt(curlExample)">复制</button>
+        </div>
+
+        <div class="card">
+          <div class="card-title">OpenAI Responses API 调用示例</div>
+          <div class="text-muted text-xs mono">POST /v1/responses · Base URL: http://localhost:1455/v1</div>
+          <pre class="code-block" x-text="responsesCurlExample"></pre>
+          <button type="button" class="btn btn-sm mt-2" @click="copyTxt(responsesCurlExample)">复制</button>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Claude Messages 调用示例（响应为 OpenAI 格式）</div>
+          <div class="text-muted text-xs mono">POST /v1/messages · Base URL: http://localhost:1455</div>
+          <pre class="code-block" x-text="claudeCurlExample"></pre>
+          <button type="button" class="btn btn-sm mt-2" @click="copyTxt(claudeCurlExample)">复制</button>
+        </div>
+
+        <div class="card">
+          <div class="card-title">图片生成调用示例（模型自动获取）</div>
+          <div class="text-muted text-xs mono">POST /v1/images/generations · Base URL: http://localhost:1455</div>
+          <pre class="code-block" x-text="imageCurlExample"></pre>
+          <button type="button" class="btn btn-sm mt-2" @click="copyTxt(imageCurlExample)">复制</button>
         </div>
 
         <div class="card">
@@ -175,6 +205,10 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
 
       <!-- ════ ACCOUNTS ════ -->
       <div class="content" x-show="page==='accounts'" x-cloak>
+        <div class="card" x-show="localCodexLoginStatus.status!=='idle'" style="margin-bottom:12px">
+          <div class="card-title" x-text="localCodexLoginStatus.message || 'Codex 登录状态'"></div>
+          <pre class="mono text-xs text-muted" x-show="localCodexLoginStatus.output" x-text="localCodexLoginStatus.output" style="white-space:pre-wrap; overflow-wrap:anywhere; max-height:180px; overflow:auto"></pre>
+        </div>
         <div class="card">
           <div class="table-wrap">
             <table>
@@ -195,7 +229,10 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
                   <tr>
                     <td class="text-muted" x-text="acc.index+1"></td>
                     <td>
-                      <div x-text="acc.name || ('账号 '+(acc.index+1))"></div>
+                      <div class="flex items-center gap-2">
+                        <span x-text="acc.name || ('账号 '+(acc.index+1))"></span>
+                        <span x-show="getAccountUsage(acc)?.is_member" class="badge badge-info" x-text="getAccountUsage(acc)?.plan_label"></span>
+                      </div>
                       <div class="mono text-dim text-xs" x-text="acc.accountIdMask||''"></div>
                     </td>
                     <td class="mono text-xs text-muted" x-text="acc.source||'—'"></td>
@@ -224,12 +261,13 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
       <!-- ════ MODELS ════ -->
       <div class="content" x-show="page==='models'" x-cloak>
         <p class="text-muted text-sm" style="margin-bottom:12px" x-show="modelsLastProbed>0" x-text="'上次探测：' + fmtTime(new Date(modelsLastProbed).toISOString())"></p>
+        <p class="text-muted text-sm" style="margin-bottom:12px" x-show="modelsCatalogError" x-text="'模型目录获取失败：' + modelsCatalogError"></p>
         <div class="card">
           <div class="table-wrap">
             <table>
               <thead><tr><th>模型 ID</th><th>状态</th><th>延迟</th><th>原因</th></tr></thead>
               <tbody>
-                <tr x-show="models.length===0"><td colspan="4" class="empty">点击“刷新探测”获取模型状态</td></tr>
+                <tr x-show="models.length===0"><td colspan="4" class="empty">模型目录会从上游动态获取；点击“刷新探测”重试</td></tr>
                 <template x-for="(m, idx) in models" :key="idx">
                   <tr>
                     <td class="mono" x-text="m.id"></td>
@@ -253,17 +291,32 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
         <div class="card">
           <div class="table-wrap">
             <table>
-              <thead><tr><th>账号</th><th>已用 Token</th><th>剩余配额</th></tr></thead>
+              <thead><tr><th>账号</th><th>本地 Token 用量</th><th>5 小时剩余</th><th>周剩余</th><th>月剩余</th></tr></thead>
               <tbody>
-                <tr x-show="usageData.length===0"><td colspan="3" class="empty">暂无数据</td></tr>
+                <tr x-show="usageData.length===0"><td colspan="5" class="empty">暂无数据</td></tr>
                 <template x-for="(u, idx) in usageData" :key="idx">
                   <tr>
                     <td>
-                      <div x-text="getAccName(u.index)"></div>
+                      <div class="flex items-center gap-2">
+                        <span x-text="getAccName(u.index)"></span>
+                        <span x-show="u.is_member" class="badge badge-info" x-text="u.plan_label"></span>
+                      </div>
                       <div class="mono text-dim text-xs" x-text="u.accountIdMask||''"></div>
+                      <div class="text-dim text-xs" x-show="u.quota_error" x-text="u.quota_error"></div>
                     </td>
                     <td class="mono" x-text="formatTok(u.used_tokens)"></td>
-                    <td class="text-muted" x-text="u.remaining_pct!=null ? u.remaining_pct+'%' : '—'"></td>
+                    <td class="text-muted">
+                      <span x-text="u.is_member && u.quota?.five_hour ? u.quota.five_hour.remaining_pct+'%' : '—'"></span>
+                      <div class="text-dim text-xs" x-text="u.is_member ? quotaResetLabel(u.quota?.five_hour?.reset_at) : ''"></div>
+                    </td>
+                    <td class="text-muted">
+                      <span x-text="u.is_member && u.quota?.weekly ? u.quota.weekly.remaining_pct+'%' : '—'"></span>
+                      <div class="text-dim text-xs" x-text="u.is_member ? quotaResetLabel(u.quota?.weekly?.reset_at) : ''"></div>
+                    </td>
+                    <td class="text-muted">
+                      <span x-text="u.is_member===false && u.quota?.monthly ? u.quota.monthly.remaining_pct+'%' : '—'"></span>
+                      <div class="text-dim text-xs" x-text="u.is_member===false ? quotaResetLabel(u.quota?.monthly?.reset_at) : ''"></div>
+                    </td>
                   </tr>
                 </template>
               </tbody>
@@ -314,6 +367,25 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
               <button type="button" class="btn" @click="showKey=!showKey" x-text="showKey?'隐藏':'显示'"></button>
             </div>
           </div>
+        </div>
+
+        <div class="card" style="max-width:560px">
+          <div class="card-title">默认对话模型</div>
+          <div class="form-row">
+            <label class="form-label">未在请求中指定模型时使用</label>
+            <div class="input-row">
+              <select x-model="cfg.default_model">
+                <option value="">自动选择首个可用模型</option>
+                <option x-show="cfg.default_model && !selectableModels.some(m => m.id === cfg.default_model)"
+                  :value="cfg.default_model" x-text="cfg.default_model + '（当前目录中未发现）'"></option>
+                <template x-for="m in selectableModels" :key="m.id">
+                  <option :value="m.id" x-text="m.id"></option>
+                </template>
+              </select>
+              <button type="button" class="btn" @click="doRefreshModels()" :disabled="loading.models">刷新模型列表</button>
+            </div>
+          </div>
+          <p class="text-muted text-sm">模型目录由 Codex 账号动态提供。选择模型后，客户端请求未填写 model 时将使用此默认值。</p>
         </div>
 
 
@@ -426,6 +498,7 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
         </button>
       </div>
     </div>
+  </div>
   <!-- ── BIND PROXY MODAL ── -->
   <div class="overlay" x-show="showBindProxy" x-cloak @keydown.escape.window="showBindProxy=false">
     <div class="modal" @click.stop style="max-width:420px">

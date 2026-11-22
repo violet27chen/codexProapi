@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { parseAuthFromJson } from './auth.js';
+import { parseAuthFromJson, resolveAuthPath } from './auth.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_ACCOUNTS_FILE = join(__dirname, '..', 'data', 'accounts.json');
@@ -79,7 +79,7 @@ export function loadAccountsForProxy() {
   const data = JSON.parse(raw);
   const list = Array.isArray(data) ? data : (data.accounts || []);
   const auths = [];
-  for (const item of list) {
+  for (const [index, item] of list.entries()) {
     const tokens = item.tokens || (item.access_token ? { access_token: item.access_token, account_id: item.account_id } : null);
     if (tokens?.access_token && tokens?.account_id) {
       auths.push({
@@ -88,6 +88,7 @@ export function loadAccountsForProxy() {
         accountId: tokens.account_id,
         name: item.name || null,
         proxyUrl: item.proxy || null, // 代理 URL
+        index,
       });
     }
   }
@@ -135,6 +136,43 @@ export function addAccount(body) {
   list.push(entry);
   writeFileSync(path, JSON.stringify({ accounts: list }, null, 2), 'utf8');
   return { ok: true };
+}
+
+/**
+ * Import the Codex CLI session from this machine's auth.json.
+ */
+export function addLocalCodexAccount(options = {}) {
+  const authPath = resolveAuthPath(process.env.CODEX_AUTH_PATH);
+  let data;
+  try {
+    data = JSON.parse(readFileSync(authPath, 'utf8'));
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      throw new Error(`未找到本机 Codex 登录信息（${authPath}），请先运行 codex login`);
+    }
+    if (error instanceof SyntaxError) {
+      throw new Error(`本机 Codex auth.json 格式错误：${error.message}`);
+    }
+    throw new Error(`无法读取本机 Codex 登录信息：${error.message}`);
+  }
+
+  if (!data || typeof data !== 'object') {
+    throw new Error('本机 Codex auth.json 内容无效');
+  }
+  const auth = parseAuthFromJson(data);
+  if (auth.type !== 'codex' || !auth.accessToken || !auth.accountId) {
+    throw new Error('本机 Codex auth.json 中未找到 access_token 和 account_id，请先运行 codex login');
+  }
+
+  const tokens = data.tokens || data;
+  return addAccount({
+    name: options.name || data.email || tokens.email || undefined,
+    access_token: auth.accessToken,
+    account_id: auth.accountId,
+    refresh_token: tokens.refresh_token,
+    source: 'local_codex',
+    proxy: options.proxy || null,
+  });
 }
 
 /**

@@ -10,7 +10,11 @@ const DEFAULT_AUTH_PATH = resolve(homedir(), '.codex', 'auth.json');
  * 解析 auth 路径：支持 ~/.codex/auth.json 与绝对路径
  */
 function resolveAuthPath(given) {
-  if (!given) return DEFAULT_AUTH_PATH;
+  if (!given) {
+    return process.env.CODEX_HOME
+      ? resolve(process.env.CODEX_HOME, 'auth.json')
+      : DEFAULT_AUTH_PATH;
+  }
   if (given.startsWith('~/')) return resolve(homedir(), given.slice(2));
   return resolve(given);
 }

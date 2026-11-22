@@ -455,7 +455,7 @@ export function getCachedImage(token) {
 // ── 主入口 ──────────────────────────────────────────────────
 
 export async function generateImage(openaiReq, auth) {
-  const model = openaiReq.model || 'gpt-image-2';
+  const model = openaiReq.model || 'auto';
   const prompt = String(openaiReq.prompt || '');
   const n = Math.min(Math.max(Number(openaiReq.n) || 1, 1), 10);
   const authToken = auth.accessToken;
