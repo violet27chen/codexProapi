@@ -143,6 +143,120 @@ function normalizeTools(tools) {
   });
 }
 
+export function normalizeClaudeMessagesRequest(body) {
+  const source = body && typeof body === 'object' ? body : {};
+  const messages = [];
+
+  if (typeof source.system === 'string' && source.system.trim()) {
+    messages.push({ role: 'system', content: source.system });
+  } else if (Array.isArray(source.system)) {
+    const systemText = source.system
+      .filter((part) => part && (part.type === 'text' || typeof part.text === 'string'))
+      .map((part) => String(part.text || '').trim())
+      .filter(Boolean)
+      .join('\n');
+    if (systemText) messages.push({ role: 'system', content: systemText });
+  }
+
+  if (Array.isArray(source.messages)) {
+    for (const message of source.messages) {
+      if (!message || typeof message !== 'object') continue;
+      const role = message.role === 'assistant' ? 'assistant' : 'user';
+      if (typeof message.content === 'string') {
+        if (message.content.trim()) messages.push({ role, content: message.content });
+        continue;
+      }
+      if (!Array.isArray(message.content)) continue;
+      const content = [];
+      for (const part of message.content) {
+        if (!part || typeof part !== 'object') continue;
+        if (part.type === 'text' && typeof part.text === 'string') {
+          content.push({ type: 'text', text: part.text });
+        } else if (part.type === 'image') {
+          const sourceInfo = part.source;
+          if (sourceInfo?.type === 'base64' && sourceInfo.media_type && sourceInfo.data) {
+            content.push({
+              type: 'image_url',
+              image_url: { url: `data:${sourceInfo.media_type};base64,${sourceInfo.data}`, detail: 'auto' },
+            });
+          } else if (sourceInfo?.type === 'url' && sourceInfo.url) {
+            content.push({ type: 'image_url', image_url: { url: sourceInfo.url, detail: 'auto' } });
+          }
+        } else if (part.type === 'tool_result') {
+          content.push({ type: 'text', text: typeof part.content === 'string' ? part.content : JSON.stringify(part.content ?? '') });
+        } else if (part.type === 'tool_use') {
+          content.push({ type: 'text', text: `${part.name || 'tool'}(${JSON.stringify(part.input || {})})` });
+        }
+      }
+      if (content.length) messages.push({ role, content });
+    }
+  }
+
+  return {
+    model: typeof source.model === 'string' ? source.model : '',
+    messages,
+    stream: source.stream === true,
+  };
+}
+
+export function normalizeOpenAIResponsesRequest(body) {
+  const source = body && typeof body === 'object' && !Array.isArray(body) ? body : {};
+  const messages = [];
+  if (typeof source.instructions === 'string' && source.instructions.trim()) {
+    messages.push({ role: 'system', content: source.instructions });
+  }
+
+  const addMessage = (role, content) => {
+    const normalizedRole = role === 'assistant' ? 'assistant' : role === 'system' || role === 'developer' ? 'system' : 'user';
+    if (typeof content === 'string' && content.trim()) {
+      messages.push({ role: normalizedRole, content });
+      return;
+    }
+    if (!Array.isArray(content)) return;
+    const parts = [];
+    for (const part of content) {
+      if (!part || typeof part !== 'object') continue;
+      if (['input_text', 'output_text', 'text'].includes(part.type) && typeof part.text === 'string') {
+        parts.push({ type: 'text', text: part.text });
+      } else if (part.type === 'input_image') {
+        const imageUrl = typeof part.image_url === 'string' ? part.image_url : part.image_url?.url;
+        if (imageUrl) {
+          parts.push({
+            type: 'image_url',
+            image_url: { url: imageUrl, detail: part.detail || 'auto' },
+          });
+        }
+      }
+    }
+    if (parts.length) messages.push({ role: normalizedRole, content: parts });
+  };
+
+  if (typeof source.input === 'string') {
+    addMessage('user', source.input);
+  } else if (Array.isArray(source.input)) {
+    for (const item of source.input) {
+      if (typeof item === 'string') {
+        addMessage('user', item);
+      } else if (item && typeof item === 'object' && (item.type === 'message' || item.role)) {
+        addMessage(item.role || 'user', item.content);
+      } else {
+        throw new Error('Responses API 的 input 仅支持文本/图片消息');
+      }
+    }
+  } else {
+    throw new Error('Responses API 请求必须包含 string 或 array 类型的 input');
+  }
+
+  if (Array.isArray(source.tools) && source.tools.length) {
+    throw new Error('Responses API 暂不支持 tools / function calling');
+  }
+  return {
+    model: typeof source.model === 'string' ? source.model : '',
+    messages,
+    stream: source.stream === true,
+  };
+}
+
 async function buildResponsesRequest(openaiReq, proxyUrl) {
   const tools = normalizeTools(openaiReq.tools || []);
   const rawToolChoice = openaiReq.tool_choice;
@@ -157,7 +271,7 @@ async function buildResponsesRequest(openaiReq, proxyUrl) {
     tool_choice = 'auto';
   }
   return {
-    model: openaiReq.model || 'gpt-5.3-codex',
+    model: openaiReq.model,
     instructions: 'You are a helpful AI assistant. Provide clear, accurate, and concise responses.',
     input: await messagesToInput(openaiReq.messages || [], proxyUrl),
     tools,
@@ -271,6 +385,192 @@ function pipeStreamToOpenAI(backendStream, res, model, id, opts = {}) {
   })();
 }
 
+export function formatOpenAIResponsesResult({
+  id,
+  messageId,
+  model,
+  text,
+  createdAt,
+  promptTokens,
+  completionTokens,
+  status = 'completed',
+}) {
+  return {
+    id,
+    object: 'response',
+    created_at: createdAt,
+    status,
+    error: null,
+    incomplete_details: null,
+    instructions: null,
+    max_output_tokens: null,
+    model,
+    output: [{
+      id: messageId,
+      type: 'message',
+      status,
+      role: 'assistant',
+      content: [{ type: 'output_text', text, annotations: [] }],
+    }],
+    parallel_tool_calls: false,
+    previous_response_id: null,
+    reasoning: { effort: null, summary: null },
+    store: false,
+    temperature: null,
+    text: { format: { type: 'text' } },
+    tool_choice: 'auto',
+    tools: [],
+    top_p: 1,
+    truncation: 'disabled',
+    usage: {
+      input_tokens: promptTokens,
+      input_tokens_details: { cached_tokens: 0 },
+      output_tokens: completionTokens,
+      output_tokens_details: { reasoning_tokens: 0 },
+      total_tokens: promptTokens + completionTokens,
+    },
+  };
+}
+
+export async function pipeStreamToResponses(backendStream, res, model, opts = {}) {
+  const responseId = `resp_${randomUUID().replace(/-/g, '')}`;
+  const messageId = `msg_${randomUUID().replace(/-/g, '')}`;
+  const createdAt = Math.floor(Date.now() / 1000);
+  const dec = new TextDecoder();
+  let buffer = '';
+  let text = '';
+  let finished = false;
+  const emit = (event) => {
+    res.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
+  };
+  const item = (status, contentText = text) => ({
+    id: messageId,
+    type: 'message',
+    status,
+    role: 'assistant',
+    content: status === 'in_progress' ? [] : [{ type: 'output_text', text: contentText, annotations: [] }],
+  });
+  const complete = () => {
+    if (finished) return;
+    finished = true;
+    const completionTokens = Math.ceil(text.length / 4);
+    opts.onFinish?.(text.length);
+    emit({
+      type: 'response.output_text.done',
+      item_id: messageId,
+      output_index: 0,
+      content_index: 0,
+      text,
+    });
+    emit({
+      type: 'response.content_part.done',
+      item_id: messageId,
+      output_index: 0,
+      content_index: 0,
+      part: { type: 'output_text', text, annotations: [] },
+    });
+    emit({ type: 'response.output_item.done', output_index: 0, item: item('completed') });
+    emit({
+      type: 'response.completed',
+      response: formatOpenAIResponsesResult({
+        id: responseId,
+        messageId,
+        model,
+        text,
+        createdAt,
+        promptTokens: opts.promptTokens || 0,
+        completionTokens,
+      }),
+    });
+  };
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  emit({
+    type: 'response.created',
+    response: {
+      id: responseId,
+      object: 'response',
+      created_at: createdAt,
+      status: 'in_progress',
+      model,
+      output: [],
+    },
+  });
+  emit({
+    type: 'response.in_progress',
+    response: {
+      id: responseId,
+      object: 'response',
+      created_at: createdAt,
+      status: 'in_progress',
+      model,
+      output: [],
+    },
+  });
+  emit({ type: 'response.output_item.added', output_index: 0, item: item('in_progress', '') });
+  emit({
+    type: 'response.content_part.added',
+    item_id: messageId,
+    output_index: 0,
+    content_index: 0,
+    part: { type: 'output_text', text: '', annotations: [] },
+  });
+
+  const reader = backendStream.getReader();
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += dec.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6);
+        if (data === '[DONE]') {
+          complete();
+          return;
+        }
+        try {
+          const event = JSON.parse(data);
+          if (event.type === 'response.output_text.delta' && event.delta) {
+            const delta = String(event.delta);
+            text += delta;
+            emit({
+              type: 'response.output_text.delta',
+              item_id: messageId,
+              output_index: 0,
+              content_index: 0,
+              delta,
+            });
+          }
+        } catch (_) {}
+      }
+    }
+    complete();
+  } catch (error) {
+    if (!finished) {
+      finished = true;
+      opts.onFinish?.(text.length);
+      emit({
+        type: 'response.failed',
+        response: {
+          id: responseId,
+          object: 'response',
+          created_at: createdAt,
+          status: 'failed',
+          error: { code: 'stream_error', message: error.message },
+        },
+      });
+    }
+  } finally {
+    res.end();
+  }
+}
+
 /**
  * 解析认证：authProvider 可为路径字符串、auth 对象、或 () => auth 的 getter
  */
@@ -362,9 +662,14 @@ export async function callCodexBackend(openaiReq, authProvider = null) {
  * @param {number} accountCount - 账号数量，用于故障切换最大重试次数
  * @returns {Promise<object|null>} 成功时返回本次使用的 auth，失败返回 null
  */
-export async function handleChatCompletions(openaiReq, res, authProvider = null, accountCount = 1) {
+export async function handleChatCompletions(
+  openaiReq,
+  res,
+  authProvider = null,
+  accountCount = 1,
+  responseFormat = 'chat.completion',
+) {
   const stream = openaiReq.stream === true;
-  const model = openaiReq.model || 'gpt-5.3-codex';
   const id = `chatcmpl-${randomUUID().replace(/-/g, '')}`;
   const maxTries = Math.max(1, Number(accountCount) || 1);
   let lastError = null;
@@ -377,20 +682,23 @@ export async function handleChatCompletions(openaiReq, res, authProvider = null,
       const who = usedAuth || auth;
       const promptTokens = await estimatePromptTokens(openaiReq);
       if (stream) {
-        res.setHeader('Content-Type', 'text/event-stream');
-        res.setHeader('Cache-Control', 'no-cache');
-        res.setHeader('Connection', 'keep-alive');
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        pipeStreamToOpenAI(backendRes.body, res, backendModel, id, {
-          onFinish: (completionChars) => {
-            if (who?.accountId) {
-              recordUsage(who.accountId, {
-                prompt_tokens: promptTokens,
-                completion_tokens: Math.ceil(completionChars / 4),
-              });
-            }
-          },
-        });
+        const onFinish = (completionChars) => {
+          if (who?.accountId) {
+            recordUsage(who.accountId, {
+              prompt_tokens: promptTokens,
+              completion_tokens: Math.ceil(completionChars / 4),
+            });
+          }
+        };
+        if (responseFormat === 'response') {
+          pipeStreamToResponses(backendRes.body, res, backendModel, { promptTokens, onFinish });
+        } else {
+          res.setHeader('Content-Type', 'text/event-stream');
+          res.setHeader('Cache-Control', 'no-cache');
+          res.setHeader('Connection', 'keep-alive');
+          res.setHeader('Access-Control-Allow-Origin', '*');
+          pipeStreamToOpenAI(backendRes.body, res, backendModel, id, { onFinish });
+        }
         return who ?? null;
       }
       const text = await parseStreamToText(backendRes.body);
@@ -398,7 +706,7 @@ export async function handleChatCompletions(openaiReq, res, authProvider = null,
       if (who?.accountId) {
         recordUsage(who.accountId, { prompt_tokens: promptTokens, completion_tokens: completionTokens });
       }
-      res.json({
+      const completion = {
         id,
         object: 'chat.completion',
         created: Math.floor(Date.now() / 1000),
@@ -411,7 +719,20 @@ export async function handleChatCompletions(openaiReq, res, authProvider = null,
           },
         ],
         usage: { prompt_tokens: promptTokens, completion_tokens: completionTokens, total_tokens: promptTokens + completionTokens },
-      });
+      };
+      if (responseFormat === 'response') {
+        res.json(formatOpenAIResponsesResult({
+          id: `resp_${randomUUID().replace(/-/g, '')}`,
+          messageId: `msg_${randomUUID().replace(/-/g, '')}`,
+          model: backendModel,
+          text,
+          createdAt: completion.created,
+          promptTokens,
+          completionTokens,
+        }));
+      } else {
+        res.json(completion);
+      }
       return who ?? null;
     } catch (e) {
       lastError = e;

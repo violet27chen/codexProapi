@@ -13,8 +13,9 @@ function app() {
         usageData: [],
         models: [],
         modelsLastProbed: 0,
+        modelsCatalogError: '',
         logs: [],
-        cfg: { api_key: '', token_refresh_interval_minutes: 60 },
+        cfg: { api_key: '', default_model: '', token_refresh_interval_minutes: 60 },
         refreshStatus: { active: false, intervalMinutes: 60, lastRun: 0, lastSummary: null, isRefreshing: false },
         showKey: false,
         showAdd: false,
@@ -26,11 +27,13 @@ function app() {
         showBindProxy: false,
         proxyEditIndex: null,
         proxyEditUrl: '',
-        loading: { usage: false, logs: false, models: false, health: false, addAcc: false, settings: false, refreshTokens: false, batchImport: false, bindProxy: false },
+        loading: { usage: false, logs: false, models: false, health: false, addAcc: false, localCodex: false, settings: false, refreshTokens: false, batchImport: false, bindProxy: false },
         toast: null,
         _tt: null,
         endpoints: [
             { m: 'POST', path: '/v1/chat/completions', desc: '对话补全' },
+            { m: 'POST', path: '/v1/responses', desc: 'OpenAI Responses API' },
+            { m: 'POST', path: '/v1/messages', desc: 'Claude Messages 格式兼容（OpenAI 格式响应）' },
             { m: 'POST', path: '/v1/images/generations', desc: '图片生成' },
             { m: 'GET',  path: '/v1/models',            desc: '模型列表' },
             { m: 'GET',  path: '/health',               desc: '健康检查' },
@@ -44,6 +47,9 @@ function app() {
         get availableModelsCount() {
             return this.models.filter(m => m.available === true).length;
         },
+        get selectableModels() {
+            return this.models.filter(m => m.type === 'text' && m.available !== false);
+        },
         get todayReqs() {
             const d = new Date().toISOString().slice(0, 10);
             return this.logs.filter(l => l.type === 'request' && l.time && l.time.startsWith(d)).length;
@@ -53,10 +59,45 @@ function app() {
         },
         get curlExample() {
             const k = this.cfg.api_key;
-            const auth = k ? `\n  -H "Authorization: Bearer ${k}" \\` : '';
-            return `curl http://localhost:1455/v1/chat/completions \\
-  -H "Content-Type: application/json" \\${auth}
-  -d '{"model":"gpt-5.3-codex","messages":[{"role":"user","content":"你好"}]}'`;
+            const auth = k ? `  -H "Authorization: Bearer ${k}" \\\n` : '';
+            const model = this.cfg.default_model || this.selectableModels[0]?.id || '自动获取的模型 ID';
+            const body = { model, messages: [{ role: 'user', content: '你好' }], stream: false };
+            return `curl -sS http://localhost:1455/v1/chat/completions \\
+  -H "Content-Type: application/json" \\
+${auth}  -d '${JSON.stringify(body)}'`;
+        },
+        get claudeCurlExample() {
+            const k = this.cfg.api_key;
+            const auth = k ? `  -H "x-api-key: ${k}" \\\n` : '';
+            const model = this.cfg.default_model || this.selectableModels[0]?.id || '自动获取的模型 ID';
+            const body = {
+                model,
+                max_tokens: 1024,
+                system: 'You are a helpful assistant.',
+                messages: [{ role: 'user', content: '你好' }],
+                stream: false,
+            };
+            return `curl -sS http://localhost:1455/v1/messages \\
+  -H "Content-Type: application/json" \\
+${auth}  -d '${JSON.stringify(body)}'`;
+        },
+        get responsesCurlExample() {
+            const k = this.cfg.api_key;
+            const auth = k ? `  -H "Authorization: Bearer ${k}" \\\n` : '';
+            const model = this.cfg.default_model || this.selectableModels[0]?.id || '自动获取的模型 ID';
+            const body = { model, input: '你好', stream: false };
+            return `curl -sS http://localhost:1455/v1/responses \\
+  -H "Content-Type: application/json" \\
+${auth}  -d '${JSON.stringify(body)}'`;
+        },
+        get imageCurlExample() {
+            const k = this.cfg.api_key;
+            const auth = k ? `  -H "Authorization: Bearer ${k}" \\\n` : '';
+            const imageModel = this.models.find(m => m.type === 'image' && m.available !== false)?.id;
+            const body = { prompt: '一只橘猫坐在窗边', n: 1, size: '1024x1024', ...(imageModel ? { model: imageModel } : {}) };
+            return `curl -sS http://localhost:1455/v1/images/generations \\
+  -H "Content-Type: application/json" \\
+${auth}  -d '${JSON.stringify(body)}'`;
         },
 
         /* ── init ── */
@@ -115,7 +156,14 @@ function app() {
         },
         async loadUsage() {
             this.loading.usage = true;
-            try { this.usageData = (await (await fetch('/api/usage')).json()).accounts || []; } catch {} finally { this.loading.usage = false; }
+            try {
+                const r = await fetch('/api/usage');
+                const d = await r.json();
+                if (!r.ok) throw new Error(d.error || '读取用量失败');
+                this.usageData = d.accounts || [];
+            } catch (e) {
+                this.toast2('读取配额失败：' + e.message, 'error');
+            } finally { this.loading.usage = false; }
         },
         async loadLogs() {
             this.loading.logs = true;
@@ -127,19 +175,25 @@ function app() {
                 const d = await (await fetch('/api/models')).json();
                 this.models = d.models || [];
                 this.modelsLastProbed = d.lastProbed || 0;
+                this.modelsCatalogError = d.catalogError || '';
             } catch {} finally { this.loading.models = false; }
         },
         async doRefreshModels() {
             this.loading.models = true;
-            this.toast2('探测进行中，需 10-30 秒…', 'info');
+            this.toast2('正在获取模型目录并探测可用性…', 'info');
             try {
                 const r = await fetch('/api/models/refresh', { method: 'POST' });
                 const d = await r.json();
                 if (r.ok) {
                     this.models = d.models || [];
                     this.modelsLastProbed = d.lastProbed || 0;
+                    this.modelsCatalogError = d.catalogError || '';
                     const ok = this.models.filter(m => m.available === true).length;
-                    this.toast2(`探测完成：${ok}/${this.models.length} 可用`, 'success');
+                    if (this.modelsCatalogError) {
+                        this.toast2('模型目录获取失败：' + this.modelsCatalogError, 'error');
+                    } else {
+                        this.toast2(`探测完成：${ok}/${this.models.length} 可用`, 'success');
+                    }
                 } else {
                     this.toast2('探测失败：' + (d.error || ''), 'error');
                 }
@@ -168,6 +222,7 @@ function app() {
                 if (d.ok) {
                     this.cfg = {
                         api_key: d.api_key || '',
+                        default_model: d.default_model || '',
                         token_refresh_interval_minutes: d.token_refresh_interval_minutes || 60,
                     };
                     this.toast2('设置已保存', 'success');
@@ -198,6 +253,27 @@ function app() {
                 if (r.ok && d.ok) { this.toast2('账号添加成功', 'success'); this.showAdd = false; await this.loadAccounts(); }
                 else this.toast2('添加失败：' + (d.error || '未知'), 'error');
             } catch (e) { this.toast2('添加失败：' + e.message, 'error'); } finally { this.loading.addAcc = false; }
+        },
+        async importLocalCodex() {
+            this.loading.localCodex = true;
+            try {
+                const r = await fetch('/api/accounts/import-local', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({}),
+                });
+                const d = await r.json();
+                if (r.ok && d.ok) {
+                    this.toast2('本机 Codex 账号添加成功', 'success');
+                    await this.loadAccounts();
+                } else {
+                    this.toast2('添加失败：' + (d.error || '未知'), 'error');
+                }
+            } catch (e) {
+                this.toast2('添加失败：' + e.message, 'error');
+            } finally {
+                this.loading.localCodex = false;
+            }
         },
         async checkAccountsHealth() {
             this.loading.health = true;
@@ -328,6 +404,17 @@ function app() {
         getAccName(idx) {
             const a = this.accounts.find(x => x.index === idx);
             return a ? (a.name || `账号 ${idx + 1}`) : `账号 ${idx + 1}`;
+        },
+        getAccountUsage(account) {
+            return this.usageData.find(u => u.accountIdMask && u.accountIdMask === account.accountIdMask);
+        },
+        quotaResetLabel(timestamp) {
+            if (!timestamp) return '';
+            const value = typeof timestamp === 'number' && timestamp < 1e12 ? timestamp * 1000 : timestamp;
+            const date = new Date(value);
+            return Number.isNaN(date.getTime())
+                ? ''
+                : '重置 ' + date.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
         },
         formatTok(n) {
             if (!n) return '0';
