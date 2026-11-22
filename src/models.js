@@ -188,53 +188,55 @@ function probeAll() {
     cache.inProgress = true;
     const newResults = {};
     try {
-      let activeAuth = null;
+      const catalogByAccount = new Map();
+      const discoveredIds = new Set();
+      catalogError = null;
       for (const candidate of auths) {
         if (isAccountUnavailable(candidate.accountId)) continue;
         const probeAuth = { ...candidate };
         try {
-          const discoveredIds = await fetchModelCatalog(probeAuth);
-          const test = discoveredIds.length ? await probeModel(discoveredIds[0], probeAuth) : null;
-          if (!test || test.available || test.reason === 'model_not_found') {
-            modelIds = discoveredIds;
-            catalogError = null;
-            activeAuth = probeAuth;
-            if (test) newResults[discoveredIds[0]] = { ...test, probedAt: Date.now() };
-            break;
-          }
-          if (test.reason === 'token_invalidated' || test.reason === 'auth_failed') {
-            markAccountUnavailable(candidate.accountId);
-          }
+          const ids = await fetchModelCatalog(probeAuth);
+          catalogByAccount.set(candidate.accountId, ids);
+          ids.forEach((id) => discoveredIds.add(id));
         } catch (e) {
-          catalogError = e.message;
+          catalogError = catalogError ? `${catalogError}; ${e.message}` : e.message;
           if (e.status === 401 || e.status === 403) {
             markAccountUnavailable(candidate.accountId);
           }
         }
-        if (activeAuth) {
-          break;
-        }
       }
-
-      if (!activeAuth) {
-        for (const modelId of modelIds) {
-          newResults[modelId] = {
-            available: false,
-            latency: 0,
-            reason: 'no_healthy_account',
-            probedAt: Date.now(),
-          };
-        }
-        cache.results = newResults;
-        cache.lastProbed = Date.now();
-        return;
-      }
+      modelIds = [...discoveredIds];
 
       for (const modelId of modelIds) {
-        if (newResults[modelId]) continue;
-        const r = await probeModel(modelId, { ...activeAuth });
-        newResults[modelId] = { ...r, probedAt: Date.now() };
-        await new Promise((res) => setTimeout(res, 200));
+        const accountResults = [];
+        for (const candidate of auths) {
+          if (isAccountUnavailable(candidate.accountId)) continue;
+          const ids = catalogByAccount.get(candidate.accountId);
+          if (!ids?.includes(modelId)) continue;
+          const result = await probeModel(modelId, { ...candidate });
+          accountResults.push({
+            accountIdMask: `${candidate.accountId.slice(0, 8)}…`,
+            available: result.available,
+            latency: result.latency,
+            reason: result.reason,
+          });
+          if (result.reason === 'token_invalidated' || result.reason === 'auth_failed') {
+            markAccountUnavailable(candidate.accountId);
+          }
+          await new Promise((res) => setTimeout(res, 100));
+        }
+        const availableResults = accountResults.filter((r) => r.available);
+        const available = availableResults.length > 0;
+        const result = available
+          ? availableResults.reduce((best, r) => r.latency < best.latency ? r : best)
+          : accountResults[0];
+        newResults[modelId] = {
+          available,
+          latency: result?.latency ?? 0,
+          reason: available ? null : (result?.reason || 'no_healthy_account'),
+          accountResults,
+          probedAt: Date.now(),
+        };
       }
       cache.results = newResults;
       cache.lastProbed = Date.now();

@@ -284,11 +284,11 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
                     <td class="mono" x-text="m.id"></td>
                     <td>
                       <span class="badge"
-                        :class="m.available===true?'badge-ok':m.available===false?'badge-err':'badge-gray'"
+                        :class="modelStatusClass(m)"
                         x-text="modelStatusLabel(m)"></span>
                     </td>
                     <td class="text-muted" x-text="m.latency!=null ? m.latency+'ms' : '—'"></td>
-                    <td class="text-muted text-xs" x-text="modelReasonLabel(m.reason)"></td>
+                    <td class="text-muted text-xs" x-text="modelReasonLabel(m.reason, m)"></td>
                   </tr>
                 </template>
               </tbody>
@@ -335,8 +335,9 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
           </div>
         </div>
         <div class="card mt-3">
-          <div class="card-title">模型额度</div>
-          <div class="text-muted text-xs mb-2" x-show="!usageData.some(u => u.model_quotas?.length)">上游未提供模型级额度数据</div>
+          <details>
+            <summary class="card-title" style="cursor:pointer">模型额度</summary>
+          <div class="text-muted text-xs mb-2 mt-2" x-show="!usageData.some(u => u.model_quotas?.length)">上游未提供模型级额度数据</div>
           <div class="table-wrap" x-show="usageData.some(u => u.model_quotas?.length)">
             <table>
               <thead><tr><th>账号</th><th>模型</th><th>剩余额度</th><th>重置时间</th></tr></thead>
@@ -357,6 +358,7 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
               </tbody>
             </table>
           </div>
+          </details>
         </div>
       </div>
 

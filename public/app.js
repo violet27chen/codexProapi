@@ -488,11 +488,28 @@ ${auth}  -d '${JSON.stringify(body)}'`;
                 : '重置 ' + date.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
         },
         modelStatusLabel(model) {
+            if (this.modelQuotaIsEmpty(model.id)) return '不可用';
             if (model.available === true) return '可用';
             if (model.available === false) return '不可用';
             return '探测中';
         },
-        modelReasonLabel(reason) {
+        modelStatusClass(model) {
+            if (this.modelQuotaIsEmpty(model.id) || model.available === false) return 'badge-err';
+            if (model.available === true) return 'badge-ok';
+            return 'badge-gray';
+        },
+        modelQuotaIsEmpty(modelId) {
+            const quotaEntries = [];
+            for (const usage of this.usageData) {
+                for (const quota of usage.model_quotas || []) {
+                    if (quota.model === modelId) quotaEntries.push(quota);
+                }
+            }
+            return quotaEntries.length > 0
+                && quotaEntries.every((quota) => Number(quota.remaining_pct) <= 0);
+        },
+        modelReasonLabel(reason, model) {
+            if (model && this.modelQuotaIsEmpty(model.id)) return '模型额度已用尽';
             const labels = {
                 model_not_found: '模型不存在或不支持',
                 auth_failed: '认证失败',
