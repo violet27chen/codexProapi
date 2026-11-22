@@ -276,6 +276,9 @@ ${auth}  -d '${JSON.stringify(body)}'`;
             this.accountEditIndex = null;
             this.af = { mode: 'json', name: '', authJson: '', access_token: '', account_id: '', refresh_token: '', proxy: '' };
         },
+        startBrowserOAuthLogin() {
+            window.location.assign('/auth/login');
+        },
         editAccount(acc) {
             this.accountEditIndex = acc.index;
             this.af = {

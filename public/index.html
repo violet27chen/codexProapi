@@ -419,16 +419,22 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
         </button>
       </div>
       <div class="tab-bar" x-show="accountEditIndex === null">
+        <div class="tab-item" :class="af.mode==='browser'&&'active'" @click="af.mode='browser'">浏览器登录</div>
         <div class="tab-item" :class="af.mode==='json'&&'active'" @click="af.mode='json'">粘贴 auth.json</div>
         <div class="tab-item" :class="af.mode==='manual'&&'active'" @click="af.mode='manual'">手动填写</div>
       </div>
-      <div class="form-row">
+      <div class="form-row" x-show="af.mode!=='browser'">
         <label class="form-label">账号名称（可选）</label>
         <input type="text" x-model="af.name" placeholder="如：账号 1">
       </div>
-      <div class="form-row">
+      <div class="form-row" x-show="af.mode!=='browser'">
         <label class="form-label">代理 URL（可选）</label>
         <input type="text" class="mono" x-model="af.proxy" placeholder="如：http://127.0.0.1:7890">
+      </div>
+      <div x-show="af.mode==='browser'" class="oauth-login-panel">
+        <div class="oauth-login-title">使用 OpenAI 浏览器登录</div>
+        <div class="oauth-login-desc">将在新浏览器窗口打开官方登录页。登录完成后，账号会自动兑换 Token 并导入到账号列表。</div>
+        <button type="button" class="btn btn-primary" @click="startBrowserOAuthLogin()">打开浏览器登录</button>
       </div>
       <div x-show="af.mode==='json'">
         <div class="form-row">
@@ -456,7 +462,7 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
       </div>
       <div class="modal-footer">
         <button type="button" class="btn" @click="showAdd=false">取消</button>
-        <button type="button" class="btn btn-primary" @click="submitAdd()" :class="{'btn-dis':loading.addAcc}">
+        <button type="button" class="btn btn-primary" x-show="af.mode!=='browser' || accountEditIndex!==null" @click="submitAdd()" :class="{'btn-dis':loading.addAcc}">
           <svg x-show="loading.addAcc" class="spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.22-8.56"/></svg>
           <span x-text="accountEditIndex !== null ? '确认修改' : '确认添加'"></span>
         </button>
