@@ -1,6 +1,6 @@
 # Codex Pro API
 
-Exposes Codex (gpt-5.5, gpt-5.4, gpt-5.4-mini, gpt-5.3-codex, gpt-image-2, and more) as an OpenAI-compatible API so you can use it in Cline, Cursor, or any client that supports OpenAI-style endpoints. Supports text chat (/v1/chat/completions) and image generation (/v1/images/generations).
+Exposes Codex models discovered dynamically from your account as an OpenAI-compatible API so you can use it in Cline, Cursor, or any client that supports OpenAI-style endpoints. Supports text chat (/v1/chat/completions) and image generation (/v1/images/generations).
 
 For Chinese documentation, please see README.zh-CN.md.
 
@@ -70,7 +70,7 @@ Configure your client using the following settings:
 | Setting | Value |
 |---------|-------|
 | Base URL | http://localhost:1455/v1 (must include /v1; or your custom host/port + /v1) |
-| Model | gpt-5.4, gpt-5.5, or any other supported model (gpt-5.5, gpt-5.4, gpt-5.4-mini, gpt-5.3-codex, gpt-5.2-codex, gpt-5-codex, gpt-5, gpt-image-2, gpt-4) |
+| Model | Any model returned by `GET /v1/models`; choose a default in System Settings or pass a model ID in each request |
 | API Key | Any value (not validated; authentication is derived from your configured accounts) |
 
 ### Steps:

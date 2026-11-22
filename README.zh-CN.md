@@ -1,6 +1,6 @@
 # Codex Pro API
 
-将 Codex（gpt-5.5、gpt-5.4、gpt-5.4-mini、gpt-5.3-codex、gpt-image-2 等）以 OpenAI 兼容 API 形式暴露，可在 Cline、Cursor 等支持 OpenAI 接口的客户端中使用。支持文本对话（/v1/chat/completions）和图像生成（/v1/images/generations）。
+将账号可用的 Codex 模型动态获取并以 OpenAI 兼容 API 形式暴露，可在 Cline、Cursor 等支持 OpenAI 接口的客户端中使用。支持文本对话（/v1/chat/completions）和图像生成（/v1/images/generations）。
 
 英文说明请参阅 README.md。
 
@@ -76,7 +76,7 @@ npm run dist:win
 | 配置项 | 填写内容 |
 |--------|----------|
 | Base URL | http://localhost:1455/v1（必须包含 /v1；若使用自定义主机或端口，请改为对应地址 + /v1） |
-| 模型 | gpt-5.4 或 gpt-5.5（完整支持：gpt-5.5、gpt-5.4、gpt-5.4-mini、gpt-5.3-codex、gpt-5.2-codex、gpt-5-codex、gpt-5、gpt-image-2、gpt-4） |
+| 模型 | 使用 `GET /v1/models` 返回的模型；可在系统设置选择默认模型，也可在每次请求中传入模型 ID |
 | API Key | 任意填写（不进行强校验，认证基于您配置的 Codex 账号） |
 
 ### 操作步骤：

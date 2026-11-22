@@ -1,7 +1,7 @@
 {
   "name": "codex-proapi",
   "version": "1.0.9",
-  "description": "将 Codex (gpt-5.3-codex) 以 OpenAI 兼容 API 形式暴露，可在 Cline、Cursor 等客户端中使用。桌面版内置配置页，开箱即用。",
+  "description": "动态获取 Codex 模型并以 OpenAI 兼容 API 形式暴露，可在 Cline、Cursor 等客户端中使用。桌面版内置配置页，开箱即用。",
   "author": "violettoolssite",
   "type": "module",
   "main": "electron/main.cjs",
@@ -17,6 +17,7 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
+    "test": "node --test",
     "explore-signup": "node scripts/explore-signup.js",
     "electron": "node scripts/run-electron.cjs",
     "build:app-resources": "node scripts/build-app-resources.cjs",
