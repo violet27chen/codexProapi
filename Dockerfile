@@ -4,6 +4,7 @@ ENV NODE_ENV=production \
     PORT=1455 \
     CODEX_DATA_DIR=/data \
     CODEX_ACCOUNTS_FILE=/data/accounts.json
+# ADMIN_PASSWORD 由运行时注入（≥ 16 位），留空则跳过认证
 
 WORKDIR /app
 

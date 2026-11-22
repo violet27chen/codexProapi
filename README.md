@@ -72,6 +72,8 @@ Update with `git pull && docker compose up -d --build`. Stop the service while p
 
 When serving through a domain or reverse proxy, set `PUBLIC_URL` to the full externally accessible URL before starting (for example, `https://api.example.com`) so OAuth uses the correct callback address. Account tokens are stored in the persistent volume; secure access to the Docker host and volume.
 
+Strongly recommended for production: set `ADMIN_PASSWORD` (≥ 16 chars) in compose.yaml or a `.env` file to gate the management dashboard. Leave it unset for local dev (skips authentication).
+
 ---
 
 ## Client Configuration (Cline, Cursor, etc.)

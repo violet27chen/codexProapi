@@ -12,6 +12,9 @@ services:
       CODEX_DATA_DIR: /data
       CODEX_ACCOUNTS_FILE: /data/accounts.json
       PUBLIC_URL: ${PUBLIC_URL:-}
+      # 管理员密码（≥ 16 位）。留空则跳过认证（开发模式）。
+      # 生产部署强烈建议设置：ADMIN_PASSWORD=your-16char-random-secret
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
     volumes:
       - codex-data:/data
     healthcheck:
