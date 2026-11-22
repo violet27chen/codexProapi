@@ -182,4 +182,4 @@ Parameters: model, prompt, n (1-10), size, quality, output_format, background, m
 
 ## License
 
-MIT. For issues and suggestions, visit GitHub Issues: https://github.com/violettoolssite/codexProapi/issues.
+MIT.

@@ -178,4 +178,4 @@ curl -X POST http://localhost:1455/v1/images/generations \
 
 ## 开源协议
 
-MIT。问题与建议请前往 GitHub Issues 提交：https://github.com/violettoolssite/codexProapi/issues。
+MIT。
