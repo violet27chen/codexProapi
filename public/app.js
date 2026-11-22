@@ -14,6 +14,7 @@ function app() {
         models: [],
         modelsLastProbed: 0,
         modelsCatalogError: '',
+        modelsInProgress: false,
         logs: [],
         cfg: { api_key: '', default_model: '', token_refresh_interval_minutes: 60 },
         refreshStatus: { active: false, intervalMinutes: 60, lastRun: 0, lastSummary: null, isRefreshing: false },
@@ -45,6 +46,12 @@ function app() {
         },
         get availableModelsCount() {
             return this.models.filter(m => m.available === true).length;
+        },
+        get unavailableModelsCount() {
+            return this.models.filter(m => m.available === false).length;
+        },
+        get unknownModelsCount() {
+            return this.models.filter(m => m.available == null).length;
         },
         get selectableModels() {
             return this.models.filter(m => m.type === 'text' && m.available !== false);
@@ -155,6 +162,9 @@ ${auth}  -d '${JSON.stringify(body)}'`;
             setInterval(() => {
                 if (this.page === 'logs' || this.page === 'dashboard') this.loadLogs();
             }, 10000);
+            setInterval(() => {
+                if (this.page === 'models' && !this.loading.models) this.doRefreshModels(false);
+            }, 60000);
             setInterval(() => this.checkHealth(), 30000);
             setInterval(() => {
                 if (this.page === 'settings') this.loadRefreshStatus();
@@ -214,11 +224,13 @@ ${auth}  -d '${JSON.stringify(body)}'`;
                 this.models = d.models || [];
                 this.modelsLastProbed = d.lastProbed || 0;
                 this.modelsCatalogError = d.catalogError || '';
+                this.modelsInProgress = d.inProgress === true;
             } catch {} finally { this.loading.models = false; }
         },
-        async doRefreshModels() {
+        async doRefreshModels(showToast = true) {
             this.loading.models = true;
-            this.toast2('正在获取模型目录并探测可用性…', 'info');
+            this.modelsInProgress = true;
+            if (showToast) this.toast2('正在获取模型目录并探测可用性…', 'info');
             try {
                 const r = await fetch('/api/models/refresh', { method: 'POST' });
                 const d = await r.json();
@@ -226,16 +238,17 @@ ${auth}  -d '${JSON.stringify(body)}'`;
                     this.models = d.models || [];
                     this.modelsLastProbed = d.lastProbed || 0;
                     this.modelsCatalogError = d.catalogError || '';
+                    this.modelsInProgress = d.inProgress === true;
                     const ok = this.models.filter(m => m.available === true).length;
-                    if (this.modelsCatalogError) {
+                    if (showToast && this.modelsCatalogError) {
                         this.toast2('模型目录获取失败：' + this.modelsCatalogError, 'error');
-                    } else {
+                    } else if (showToast) {
                         this.toast2(`探测完成：${ok}/${this.models.length} 可用`, 'success');
                     }
-                } else {
+                } else if (showToast) {
                     this.toast2('探测失败：' + (d.error || ''), 'error');
                 }
-            } catch (e) { this.toast2('探测失败：' + e.message, 'error'); } finally { this.loading.models = false; }
+            } catch (e) { if (showToast) this.toast2('探测失败：' + e.message, 'error'); } finally { this.loading.models = false; this.modelsInProgress = false; }
         },
         async clearLogs() {
             if (!confirm('确定清空所有日志？')) return;
@@ -473,6 +486,23 @@ ${auth}  -d '${JSON.stringify(body)}'`;
             return Number.isNaN(date.getTime())
                 ? ''
                 : '重置 ' + date.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
+        },
+        modelStatusLabel(model) {
+            if (model.available === true) return '可用';
+            if (model.available === false) return '不可用';
+            return '探测中';
+        },
+        modelReasonLabel(reason) {
+            const labels = {
+                model_not_found: '模型不存在或不支持',
+                auth_failed: '认证失败',
+                token_invalidated: 'Token 已失效',
+                timeout: '探测超时',
+                network_error: '网络错误',
+                no_healthy_account: '没有可用账号',
+                not_probed: '尚未探测',
+            };
+            return reason ? (labels[reason] || reason) : '—';
         },
         formatTok(n) {
             if (!n) return '0';

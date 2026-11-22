@@ -41,7 +41,7 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
           账号管理
           <span x-show="accounts.length>0" class="badge badge-info ml-auto" x-text="accounts.length"></span>
         </div>
-        <div class="nav-item" :class="page==='models'&&'active'" @click="page='models'; loadModels()">
+        <div class="nav-item" :class="page==='models'&&'active'" @click="page='models'; doRefreshModels(false)">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
           模型可用性
           <span x-show="models.length>0" class="badge badge-ok ml-auto" x-text="availableModelsCount+'/'+models.length"></span>
@@ -258,6 +258,21 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
       <div class="content" x-show="page==='models'" x-cloak>
         <p class="text-muted text-sm" style="margin-bottom:12px" x-show="modelsLastProbed>0" x-text="'上次探测：' + fmtTime(new Date(modelsLastProbed).toISOString())"></p>
         <p class="text-muted text-sm" style="margin-bottom:12px" x-show="modelsCatalogError" x-text="'模型目录获取失败：' + modelsCatalogError"></p>
+        <div class="stats-grid mb-3">
+          <div class="stat-card">
+            <div class="stat-label">可用模型</div>
+            <div class="stat-value" x-text="availableModelsCount"></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">不可用模型</div>
+            <div class="stat-value" x-text="unavailableModelsCount"></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">探测中/未知</div>
+            <div class="stat-value" x-text="unknownModelsCount"></div>
+          </div>
+        </div>
+        <div class="text-muted text-xs mb-2" x-show="modelsInProgress || loading.models">正在实时探测模型可用性…</div>
         <div class="card">
           <div class="table-wrap">
             <table>
@@ -270,10 +285,10 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
                     <td>
                       <span class="badge"
                         :class="m.available===true?'badge-ok':m.available===false?'badge-err':'badge-gray'"
-                        x-text="m.available===true?'可用':m.available===false?'不可用':'未知'"></span>
+                        x-text="modelStatusLabel(m)"></span>
                     </td>
                     <td class="text-muted" x-text="m.latency!=null ? m.latency+'ms' : '—'"></td>
-                    <td class="text-muted text-xs" x-text="m.reason||'—'"></td>
+                    <td class="text-muted text-xs" x-text="modelReasonLabel(m.reason)"></td>
                   </tr>
                 </template>
               </tbody>
