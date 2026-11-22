@@ -57,6 +57,25 @@ npm run dist:win
 ```
 若出现“Cannot create symbolic link”错误，请以管理员身份运行终端，或开启开发者模式（设置 -> 更新和安全 -> 开发者选项）后重试。
 
+### 方式二：Docker Compose
+
+需要 Docker Engine 和 Docker Compose。克隆项目后，在项目根目录执行：
+
+```bash
+docker compose up -d --build
+```
+
+访问 `http://localhost:1455` 添加账号。账号、配置和用量数据保存在 `codex-data` 命名卷中；查看运行状态和日志：
+
+```bash
+docker compose ps
+docker compose logs -f
+```
+
+更新版本：`git pull && docker compose up -d --build`。停止服务但保留数据：`docker compose down`。删除命名卷会永久删除账号及相关数据。
+
+若通过域名或反向代理提供服务，请在启动前设置 `PUBLIC_URL` 为外部可访问的完整 URL（例如 `https://api.example.com`），确保 OAuth 登录回调使用正确地址。账号 Token 保存在持久卷中，请保护 Docker 主机和该卷的访问权限。
+
 ---
 
 ## 在客户端中使用（Cline、Cursor 等）

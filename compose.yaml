@@ -1,0 +1,29 @@
+services:
+  codex-proapi:
+    build:
+      context: .
+    image: codex-proapi:local
+    container_name: codex-proapi
+    restart: unless-stopped
+    ports:
+      - "1455:1455"
+    environment:
+      PORT: "1455"
+      CODEX_DATA_DIR: /data
+      CODEX_ACCOUNTS_FILE: /data/accounts.json
+      PUBLIC_URL: ${PUBLIC_URL:-}
+    volumes:
+      - codex-data:/data
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:1455/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+volumes:
+  codex-data:

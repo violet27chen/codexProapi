@@ -1,0 +1,15 @@
+.git
+.github
+.vscode
+node_modules
+data
+dist
+release
+videos
+test
+scripts
+electron
+*.log
+.env
+.env.*
+!.env.example

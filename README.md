@@ -49,6 +49,29 @@ If you prefer not to use the command line:
    Note: The desktop app is Windows only for now.
 3. Install and run. The configuration panel opens inside the app window. Closing the app stops the local service. All accounts and configuration data are stored in your local user data directory, separate from the installation folder.
 
+### Option 2: Docker Compose
+
+Requires Docker Engine and Docker Compose. From the project root, run:
+
+```bash
+docker compose up -d --build
+```
+
+Open `http://localhost:1455` to add accounts. Accounts, settings, and usage data are stored in the `codex-data` named volume. Inspect status and logs with:
+
+```bash
+docker compose ps
+docker compose logs -f
+```
+
+Update with `git pull && docker compose up -d --build`. Stop the service while preserving data with `docker compose down`. Removing the named volume permanently deletes the accounts and related data.
+
+When serving through a domain or reverse proxy, set `PUBLIC_URL` to the full externally accessible URL before starting (for example, `https://api.example.com`) so OAuth uses the correct callback address. Account tokens are stored in the persistent volume; secure access to the Docker host and volume.
+
+### Build a Windows installer locally (developers)
+
+Run `npm run dist:win` from the project directory. The installer is written to `release/`.
+
 ---
 
 ## Client Configuration (Cline, Cursor, etc.)
