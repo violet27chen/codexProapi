@@ -1,6 +1,6 @@
 # Codex Pro API
 
-Exposes Codex models discovered dynamically from your account as an OpenAI-compatible API so you can use it in Cline, Cursor, or any client that supports OpenAI-style endpoints. Supports Chat Completions (/v1/chat/completions), the Responses API (/v1/responses), and image generation (/v1/images/generations).
+Exposes Codex models discovered dynamically from your account as an OpenAI-compatible API so you can use it in Cline, Cursor, or any client that supports OpenAI-style endpoints. Supports Chat Completions (/v1/chat/completions), the Responses API (/v1/responses), and image generation (/v1/images/generations) when an image model is available.
 
 For Chinese documentation, please see README.zh-CN.md.
 
@@ -141,8 +141,8 @@ curl -X POST http://localhost:1455/v1/messages \
 
 ## Image Generation
 
-Supported via POST /v1/images/generations (OpenAI-compatible) powered by picture_v2 system hints.
-- Supported image models are discovered automatically from the upstream model catalog and account capabilities; no fixed model list is displayed.
+POST /v1/images/generations is available only when the upstream catalog contains an image model. It is OpenAI-compatible and powered by picture_v2 system hints.
+- Image models are discovered dynamically from the upstream model catalog and account capabilities. If no image model is available, the endpoint does not guess a model and returns 503.
 - Output: Returns a local proxy URL with a 30-minute browser cache.
 
 Request Example:

@@ -1,6 +1,6 @@
 # Codex Pro API
 
-将账号可用的 Codex 模型动态获取并以 OpenAI 兼容 API 形式暴露，可在 Cline、Cursor 等支持 OpenAI 接口的客户端中使用。支持 Chat Completions（/v1/chat/completions）、Responses API（/v1/responses）和图像生成（/v1/images/generations）。
+将账号可用的 Codex 模型动态获取并以 OpenAI 兼容 API 形式暴露，可在 Cline、Cursor 等支持 OpenAI 接口的客户端中使用。支持 Chat Completions（/v1/chat/completions）、Responses API（/v1/responses）；存在可用图片模型时也支持图像生成（/v1/images/generations）。
 
 英文说明请参阅 README.md。
 
@@ -147,8 +147,8 @@ curl -X POST http://localhost:1455/v1/messages \
 
 ## 图像生成
 
-支持通过 POST /v1/images/generations（OpenAI 兼容格式）调用图像生成服务，由 picture_v2 协议支持。
-- 支持的图片模型由上游模型目录和账号能力自动发现，不再固定列表。
+仅当上游模型目录中存在可用图片模型时，支持通过 POST /v1/images/generations（OpenAI 兼容格式）调用图像生成服务，由 picture_v2 协议支持。
+- 图片模型由上游模型目录和账号能力动态发现；目录中没有图片模型时，接口不自动猜测模型，并返回 503。
 - 返回值：返回一个本地代理 URL，浏览器可直接打开，缓存有效期为 30 分钟。
 
 调用示例：

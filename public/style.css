@@ -437,6 +437,34 @@ textarea {
   color: #24292E;
   line-height: 1.6;
 }
+.code-block-wrap {
+  position: relative;
+}
+.code-block-wrap .code-block {
+  padding-right: 92px;
+  margin: 0;
+}
+.code-copy-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  min-width: 76px;
+  background: var(--surface);
+}
+.shell-command {
+  color: #7C3AED;
+  font-weight: 600;
+}
+.shell-url {
+  color: #2563EB;
+}
+.shell-option {
+  color: #C2410C;
+  font-weight: 600;
+}
+.shell-json {
+  color: #047857;
+}
 
 /* ── Modals & Overlays ── */
 .overlay {

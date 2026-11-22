@@ -25,6 +25,7 @@ function app() {
         showBatchImport: false,
         batchImportText: '',
         batchImportResults: null,
+        imageCopied: false,
         lf: 'all',
         loading: { usage: false, logs: false, models: false, health: false, addAcc: false, localCodex: false, localCodexLogin: false, settings: false, refreshTokens: false, batchImport: false },
         toast: null,
@@ -33,7 +34,6 @@ function app() {
             { m: 'POST', path: '/v1/chat/completions', desc: '对话补全' },
             { m: 'POST', path: '/v1/responses', desc: 'OpenAI Responses API' },
             { m: 'POST', path: '/v1/messages', desc: 'Claude Messages 格式兼容（OpenAI 格式响应）' },
-            { m: 'POST', path: '/v1/images/generations', desc: '图片生成' },
             { m: 'GET',  path: '/v1/models',            desc: '模型列表' },
             { m: 'GET',  path: '/health',               desc: '健康检查' },
             { m: 'POST', path: '/api/accounts/batch-import', desc: '批量导入账号' },
@@ -48,6 +48,20 @@ function app() {
         },
         get selectableModels() {
             return this.models.filter(m => m.type === 'text' && m.available !== false);
+        },
+        get imageModels() {
+            return this.models.filter(m => m.type === 'image' && m.available !== false);
+        },
+        get imageModelsAvailable() {
+            return this.imageModels.length > 0;
+        },
+        get displayedEndpoints() {
+            if (!this.imageModelsAvailable) return this.endpoints;
+            return [
+                ...this.endpoints.slice(0, 3),
+                { m: 'POST', path: '/v1/images/generations', desc: '图片生成' },
+                ...this.endpoints.slice(3),
+            ];
         },
         get todayReqs() {
             const d = new Date().toISOString().slice(0, 10);
@@ -98,6 +112,18 @@ ${auth}  -d '${JSON.stringify(body)}'`;
   -H "Content-Type: application/json" \\
 ${auth}  -d '${JSON.stringify(body)}'`;
         },
+        highlightShellCommand(command) {
+            const escaped = String(command)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+            return escaped
+                .replace(/\bcurl\b/g, '<span class="shell-command">curl</span>')
+                .replace(/(https?:\/\/[^\s\\]+)/g, '<span class="shell-url">$1</span>')
+                .replace(/(-H)(?=\s)/g, '<span class="shell-option">$1</span>')
+                .replace(/(-d)(?=\s)/g, '<span class="shell-option">$1</span>')
+                .replace(/('[^']*')/g, '<span class="shell-json">$1</span>');
+        },
 
         /* ── init ── */
         async init() {
@@ -110,6 +136,7 @@ ${auth}  -d '${JSON.stringify(body)}'`;
                 this.loadUsage(),
                 this.loadLogs(),
                 this.loadSettings(),
+                this.loadModels(),
             ]);
             this.handleOAuth();
             this.loadRefreshStatus();
@@ -472,6 +499,16 @@ ${auth}  -d '${JSON.stringify(body)}'`;
         },
         async copyTxt(txt) {
             try { await navigator.clipboard.writeText(txt); this.toast2('已复制', 'success'); } catch { this.toast2('复制失败', 'error'); }
+        },
+        async copyImageCommand() {
+            try {
+                await navigator.clipboard.writeText(this.imageCurlExample);
+                this.imageCopied = true;
+                this.toast2('图片生成命令已复制', 'success');
+                setTimeout(() => { this.imageCopied = false; }, 2000);
+            } catch {
+                this.toast2('复制失败', 'error');
+            }
         },
         toast2(msg, type = 'info') {
             this.toast = { msg, type };

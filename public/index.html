@@ -140,7 +140,7 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
             <table>
               <thead><tr><th>方法</th><th>路径</th><th>说明</th></tr></thead>
               <tbody>
-                <template x-for="(ep, idx) in endpoints" :key="idx">
+                <template x-for="(ep, idx) in displayedEndpoints" :key="idx">
                   <tr>
                     <td><span class="badge badge-info mono" x-text="ep.m"></span></td>
                     <td class="mono" x-text="ep.path"></td>
@@ -173,11 +173,13 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
           <button type="button" class="btn btn-sm mt-2" @click="copyTxt(claudeCurlExample)">复制</button>
         </div>
 
-        <div class="card">
+        <div class="card" x-show="imageModelsAvailable">
           <div class="card-title">图片生成调用示例（模型自动获取）</div>
           <div class="text-muted text-xs mono">POST /v1/images/generations · Base URL: http://localhost:1455</div>
-          <pre class="code-block" x-text="imageCurlExample"></pre>
-          <button type="button" class="btn btn-sm mt-2" @click="copyTxt(imageCurlExample)">复制</button>
+          <div class="code-block-wrap mt-2">
+            <pre class="code-block" x-html="highlightShellCommand(imageCurlExample)"></pre>
+            <button type="button" class="btn btn-sm code-copy-btn" @click="copyImageCommand()" x-text="imageCopied ? '已复制' : '复制命令'"></button>
+          </div>
         </div>
 
         <div class="card">
