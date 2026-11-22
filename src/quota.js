@@ -70,6 +70,68 @@ function getQuotaWindows(payload) {
   };
 }
 
+function getModelQuotas(payload) {
+  const candidates = [];
+  const directMaps = [
+    payload?.model_rate_limits,
+    payload?.model_limits,
+    payload?.rate_limit?.model_rate_limits,
+    payload?.rate_limit?.model_limits,
+  ];
+
+  for (const map of directMaps) {
+    if (!map || typeof map !== 'object' || Array.isArray(map)) continue;
+    for (const [model, limit] of Object.entries(map)) {
+      if (!limit || typeof limit !== 'object') continue;
+      candidates.push({ model, limit });
+    }
+  }
+
+  const directArrays = [
+    payload?.additional_rate_limits,
+    payload?.model_rate_limits,
+    payload?.model_limits,
+  ];
+  for (const list of directArrays) {
+    if (!Array.isArray(list)) continue;
+    for (const entry of list) {
+      if (!entry || typeof entry !== 'object') continue;
+      const model = entry.model
+        || entry.model_slug
+        || entry.slug
+        || entry.limit_name
+        || entry.name
+        || entry.label;
+      if (typeof model === 'string' && model.trim()) {
+        candidates.push({ model: model.trim(), limit: entry.rate_limit || entry });
+      }
+    }
+  }
+
+  const seen = new Set();
+  return candidates.reduce((result, { model, limit }) => {
+    const key = model.trim();
+    if (!key || seen.has(key)) return result;
+    seen.add(key);
+    const quotaSource = limit?.rate_limit ? limit : { rate_limit: limit };
+    const quota = getQuotaWindows(quotaSource);
+    const remaining = normalizeWindow(limit)
+      || quota.primary
+      || quota.five_hour
+      || quota.secondary
+      || quota.weekly
+      || quota.monthly;
+    if (!remaining) return result;
+    result.push({
+      model: key,
+      remaining_pct: remaining.remaining_pct,
+      reset_at: remaining.reset_at,
+      quota,
+    });
+    return result;
+  }, []);
+}
+
 export function normalizeCodexUsage(payload) {
   const { planLabel, isMember } = normalizePlan(payload?.plan_type);
   const windows = getQuotaWindows(payload);
@@ -78,6 +140,7 @@ export function normalizeCodexUsage(payload) {
     plan_type: payload?.plan_type || null,
     plan_label: planLabel,
     is_member: isMember,
+    model_quotas: getModelQuotas(payload),
     quota: {
       five_hour: isMember ? windows.five_hour || windows.primary : null,
       weekly: isMember ? windows.weekly || windows.secondary : null,

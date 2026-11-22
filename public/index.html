@@ -319,6 +319,30 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
             </table>
           </div>
         </div>
+        <div class="card mt-3">
+          <div class="card-title">模型额度</div>
+          <div class="text-muted text-xs mb-2" x-show="!usageData.some(u => u.model_quotas?.length)">上游未提供模型级额度数据</div>
+          <div class="table-wrap" x-show="usageData.some(u => u.model_quotas?.length)">
+            <table>
+              <thead><tr><th>账号</th><th>模型</th><th>剩余额度</th><th>重置时间</th></tr></thead>
+              <tbody>
+                <template x-for="(u, uidx) in usageData" :key="'model-quotas-'+uidx">
+                  <template x-for="(mq, midx) in (u.model_quotas || [])" :key="'model-quota-'+uidx+'-'+midx">
+                    <tr>
+                      <td>
+                        <span x-text="getAccName(u.index)"></span>
+                        <div class="mono text-dim text-xs" x-text="u.accountIdMask||''"></div>
+                      </td>
+                      <td class="mono" x-text="mq.model"></td>
+                      <td class="text-muted" x-text="mq.remaining_pct+'%'"></td>
+                      <td class="text-dim text-xs" x-text="quotaResetLabel(mq.reset_at) || '—'"></td>
+                    </tr>
+                  </template>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
 
       <!-- ════ LOGS ════ -->

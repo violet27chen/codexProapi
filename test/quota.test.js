@@ -34,3 +34,25 @@ test('normalizeCodexUsage maps free plan limits to the monthly quota only', () =
   assert.equal(usage.quota.weekly, null);
   assert.equal(usage.quota.monthly.remaining_pct, 65);
 });
+
+test('normalizeCodexUsage extracts model-specific quotas without fabricating values', () => {
+  const usage = normalizeCodexUsage({
+    plan_type: 'chatgpt_pro',
+    additional_rate_limits: [
+      {
+        limit_name: 'gpt-5-codex',
+        rate_limit: {
+          primary_window: { used_percent: 25, limit_window_seconds: 18_000, reset_at: 1_800_100_000 },
+        },
+      },
+    ],
+  });
+
+  assert.deepEqual(
+    usage.model_quotas.map((item) => ({
+      model: item.model,
+      remaining_pct: item.remaining_pct,
+    })),
+    [{ model: 'gpt-5-codex', remaining_pct: 75 }],
+  );
+});
