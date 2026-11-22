@@ -128,6 +128,50 @@ body {
 .dot-err  { background: #EF4444; }
 .dot-gray { background: var(--text-dim); }
 
+.admin-logout {
+  cursor: pointer;
+  color: var(--text-dim);
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: color 0.15s;
+  display: inline-flex;
+  align-items: center;
+}
+.admin-logout:hover { color: var(--text); }
+
+/* ── Admin Login Modal ── */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(17, 17, 17, 0.55);
+  backdrop-filter: blur(8px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.modal-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 32px;
+  width: 100%;
+  max-width: 380px;
+  box-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.18);
+}
+.modal-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.modal-desc {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 20px;
+}
+
 /* ── Main Content Area ── */
 .main-area {
   margin-left: var(--sidebar-w);

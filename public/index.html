@@ -63,6 +63,9 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
       <div class="sidebar-footer">
         <span class="dot" :class="health==='ok'?'dot-ok':health===null?'dot-gray':'dot-err'"></span>
         <span x-text="health==='ok'?'运行中':health===null?'连接中':'异常'"></span>
+        <span x-show="adminConfigured && adminAuthenticated" class="admin-logout" @click="logoutAdmin()" title="退出登录">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </span>
         <span class="ml-auto mono text-xs" x-text="now.slice(11,19)"></span>
       </div>
     </aside>
@@ -555,6 +558,39 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
   </div>
 
 </div><!-- /x-data -->
+
+<!-- Admin login modal -->
+<div
+  x-show="showAdminModal"
+  x-cloak
+  x-transition
+  class="modal-backdrop"
+  @keydown.enter="submitAdminLogin()"
+>
+  <div class="modal-box" @click.stop>
+    <div class="modal-title">管理员登录</div>
+    <div class="modal-desc">请输入管理员密码以访问管理后台</div>
+    <input
+      type="password"
+      x-model="adminPwd"
+      class="input"
+      placeholder="管理员密码"
+      autofocus
+      @keydown.enter.prevent="submitAdminLogin()"
+    />
+    <div x-show="adminErr" class="input-error" x-text="adminErr"></div>
+    <button
+      type="button"
+      class="btn btn-primary w-full"
+      @click="submitAdminLogin()"
+      :disabled="adminSubmitting"
+      :class="{'btn-loading':adminSubmitting}"
+    >
+      <svg x-show="adminSubmitting" class="spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.22-8.56"/></svg>
+      登录
+    </button>
+  </div>
+</div>
 
 </body>
 </html>

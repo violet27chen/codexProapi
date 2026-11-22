@@ -2,6 +2,7 @@ process.removeAllListeners('warning');
 process.on('warning', (w) => { if (w.name !== 'ExperimentalWarning') console.warn(w); });
 
 import express from 'express';
+import { createHmac, timingSafeEqual, randomUUID } from 'node:crypto';
 import { join, dirname, resolve } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
@@ -54,6 +55,50 @@ const PORT = Number(process.env.PORT) || 1455;
 const AUTH_PATH = process.env.CODEX_AUTH_PATH || null;
 const EMAIL_SERVICE_URL = (process.env.EMAIL_SERVICE_URL || 'https://free.violetteam.cloud').replace(/\/$/, '');
 const ONECLICK_DOMAINS = ['free.violetteam.cloud', 'qxfy.store', 'deploytools.site', 'loginvipcursor.icu', 'kami666.xyz'];
+
+// ── 管理员认证 ──────────────────────────────────────────
+// 通过 ADMIN_PASSWORD 环境变量保护管理后台。
+// 生产部署强烈建议配置 ≥ 16 位密码；本地开发未配置时自动跳过认证。
+const ADMIN_COOKIE = 'codexproapi_admin';
+const ADMIN_SESSION_TTL_SECONDS = 12 * 60 * 60; // 12h
+function isAdminConfigured() {
+  return typeof process.env.ADMIN_PASSWORD === 'string' && process.env.ADMIN_PASSWORD.length >= 16;
+}
+function getAdminCookieSignature(timestamp) {
+  return createHmac('sha256', process.env.ADMIN_PASSWORD).update(timestamp).digest('base64url');
+}
+function isAdminAuthenticated(req) {
+  if (!isAdminConfigured()) return true; // 未配置密码 → 开发模式放行
+  const cookies = String(req.headers.cookie || '').split(';');
+  const value = cookies.map((c) => c.trim()).find((c) => c.startsWith(`${ADMIN_COOKIE}=`))
+    ?.slice(ADMIN_COOKIE.length + 1);
+  if (!value) return false;
+  const [timestamp, signature] = value.split('.');
+  const issuedAt = Number(timestamp);
+  const now = Math.floor(Date.now() / 1000);
+  if (!Number.isSafeInteger(issuedAt) || issuedAt > now + 60 || now - issuedAt > ADMIN_SESSION_TTL_SECONDS) return false;
+  const expected = getAdminCookieSignature(timestamp);
+  const actualBytes = Buffer.from(signature || '');
+  const expectedBytes = Buffer.from(expected);
+  return actualBytes.length === expectedBytes.length && timingSafeEqual(actualBytes, expectedBytes);
+}
+function requireAdmin(req, res, next) {
+  if (!isAdminConfigured()) return next(); // 开发模式放行
+  if (isAdminAuthenticated(req)) return next();
+  // API 请求返回 401，页面请求让前端弹模态框
+  if (req.path.startsWith('/api/') || req.path.startsWith('/auth/')) {
+    return res.status(401).json({ error: '需要管理员登录' });
+  }
+  // 前端页面自己处理（isAdmin 检查）
+  next();
+}
+function setAdminCookie(res, timestamp) {
+  const cookie = `${ADMIN_COOKIE}=${timestamp}.${getAdminCookieSignature(timestamp)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${ADMIN_SESSION_TTL_SECONDS}`;
+  res.setHeader('Set-Cookie', cookie + '; Secure');
+}
+function clearAdminCookie(res) {
+  res.setHeader('Set-Cookie', `${ADMIN_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
+}
 
 function getConfigPath() {
   return join(dirname(getAccountsPath()), 'config.json');
@@ -152,6 +197,42 @@ app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
   if (req.method === 'OPTIONS') return res.sendStatus(200);
   next();
+});
+
+// ── 登录状态端点（前端查询） ──
+app.get('/api/admin/status', (req, res) => {
+  res.json({
+    configured: isAdminConfigured(),
+    authenticated: isAdminAuthenticated(req),
+  });
+});
+app.post('/api/admin/login', (req, res) => {
+  if (!isAdminConfigured()) return res.status(503).json({ error: '未配置 ADMIN_PASSWORD' });
+  const submitted = typeof req.body?.password === 'string' ? req.body.password : '';
+  const submittedBytes = Buffer.from(submitted);
+  const expectedBytes = Buffer.from(process.env.ADMIN_PASSWORD);
+  const valid = submittedBytes.length === expectedBytes.length && timingSafeEqual(submittedBytes, expectedBytes);
+  if (!valid) return res.status(401).json({ error: '密码错误' });
+  const timestamp = String(Math.floor(Date.now() / 1000));
+  setAdminCookie(res, timestamp);
+  res.json({ ok: true });
+});
+app.post('/api/admin/logout', (req, res) => {
+  clearAdminCookie(res);
+  res.json({ ok: true });
+});
+
+// ── 保护所有管理路由（/api/* 和 /auth/*） ──
+// 排除公开端点：健康检查、登录相关、对话 API（/v1/*）
+const PUBLIC_API_PATHS = new Set([
+  '/api/admin/status', '/api/admin/login', '/api/admin/logout',
+  '/health', '/v1/models', '/v1/chat/completions', '/v1/responses',
+  '/v1/messages', '/v1/images/generations', '/chat/completions', '/responses',
+]);
+app.use((req, res, next) => {
+  if (!req.path.startsWith('/api/') && !req.path.startsWith('/auth/')) return next();
+  if (PUBLIC_API_PATHS.has(req.path)) return next();
+  return requireAdmin(req, res, next);
 });
 
 // 版本号以 package.json 为准，供前端统一显示

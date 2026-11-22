@@ -31,6 +31,13 @@ function app() {
         loading: { usage: false, logs: false, models: false, health: false, addAcc: false, localCodexLogin: false, settings: false, refreshTokens: false, batchImport: false },
         toast: null,
         _tt: null,
+        // admin auth
+        adminConfigured: false,
+        adminAuthenticated: false,
+        showAdminModal: false,
+        adminPwd: '',
+        adminErr: '',
+        adminSubmitting: false,
         endpoints: [
             { m: 'POST', path: '/v1/chat/completions', desc: '对话补全' },
             { m: 'POST', path: '/v1/responses', desc: 'OpenAI Responses API' },
@@ -148,6 +155,20 @@ ${auth}  -d '${JSON.stringify(body)}'`;
         async init() {
             this.updateClock();
             setInterval(() => this.updateClock(), 1000);
+
+            // 先检查 admin 状态
+            try {
+                const s = await (await fetch('/api/admin/status')).json();
+                this.adminConfigured = !!s.configured;
+                this.adminAuthenticated = !!s.authenticated;
+            } catch {}
+
+            // 如果配置了密码但没登录，弹模态框并阻塞后续 API
+            if (this.adminConfigured && !this.adminAuthenticated) {
+                this.showAdminModal = true;
+                await this.waitAdminLogin();
+            }
+
             await Promise.all([
                 this.loadVer(),
                 this.checkHealth(),
@@ -169,6 +190,46 @@ ${auth}  -d '${JSON.stringify(body)}'`;
             setInterval(() => {
                 if (this.page === 'settings') this.loadRefreshStatus();
             }, 30000);
+        },
+
+        /* ── admin auth methods ── */
+        waitAdminLogin() {
+            return new Promise((resolve) => {
+                const check = () => {
+                    if (this.adminAuthenticated) return resolve();
+                    setTimeout(check, 200);
+                };
+                check();
+            });
+        },
+        async submitAdminLogin() {
+            if (!this.adminPwd) { this.adminErr = '请输入密码'; return; }
+            this.adminSubmitting = true;
+            this.adminErr = '';
+            try {
+                const r = await fetch('/api/admin/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password: this.adminPwd }),
+                });
+                if (r.ok) {
+                    this.adminAuthenticated = true;
+                    this.showAdminModal = false;
+                    this.adminPwd = '';
+                } else {
+                    const d = await r.json().catch(() => ({}));
+                    this.adminErr = d.error || '密码错误';
+                }
+            } catch (e) {
+                this.adminErr = '请求失败：' + e.message;
+            } finally {
+                this.adminSubmitting = false;
+            }
+        },
+        async logoutAdmin() {
+            try { await fetch('/api/admin/logout', { method: 'POST' }); } catch {}
+            this.adminAuthenticated = false;
+            this.showAdminModal = true;
         },
 
         updateClock() {
