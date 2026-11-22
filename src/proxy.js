@@ -287,7 +287,7 @@ async function buildResponsesRequest(openaiReq, proxyUrl) {
 /**
  * 非流式：从 SSE 响应中收集完整文本后返回
  */
-async function parseStreamToText(stream) {
+export async function parseStreamToText(stream) {
   const reader = stream.getReader();
   const dec = new TextDecoder();
   let buffer = '';
@@ -313,6 +313,11 @@ async function parseStreamToText(stream) {
       }
     }
   }
+  if (!fullText.trim()) {
+    const error = new Error('model returned a completed response with no content');
+    error.code = 'EMPTY_MODEL_RESPONSE';
+    throw error;
+  }
   return fullText;
 }
 
@@ -320,7 +325,7 @@ async function parseStreamToText(stream) {
  * 流式：将后端 SSE 转为 OpenAI Chat Completions SSE 格式并写入 res
  * @param {object} [opts] - { onFinish(completionChars) } 流结束时回调，用于用量统计
  */
-function pipeStreamToOpenAI(backendStream, res, model, id, opts = {}) {
+export function pipeStreamToOpenAI(backendStream, res, model, id, opts = {}) {
   const dec = new TextDecoder();
   let buffer = '';
   let hasSentRole = false;
@@ -340,7 +345,7 @@ function pipeStreamToOpenAI(backendStream, res, model, id, opts = {}) {
     });
   };
   const reader = backendStream.getReader();
-  (async () => {
+  return (async () => {
     try {
       while (true) {
         const { done, value } = await reader.read();
@@ -352,6 +357,11 @@ function pipeStreamToOpenAI(backendStream, res, model, id, opts = {}) {
           if (!line.startsWith('data: ')) continue;
           const data = line.slice(6);
           if (data === '[DONE]') {
+            if (!completionChars) {
+              const error = new Error('model returned a completed response with no content');
+              error.code = 'EMPTY_MODEL_RESPONSE';
+              throw error;
+            }
             onFinish(completionChars);
             sendDelta({}, 'stop');
             res.write('data: [DONE]\n\n');
@@ -371,16 +381,21 @@ function pipeStreamToOpenAI(backendStream, res, model, id, opts = {}) {
           } catch (_) {}
         }
       }
+      if (!completionChars) {
+        const error = new Error('model returned a completed response with no content');
+        error.code = 'EMPTY_MODEL_RESPONSE';
+        throw error;
+      }
       onFinish(completionChars);
-      if (!hasSentRole) sendDelta({ role: 'assistant' });
       sendDelta({}, 'stop');
       res.write('data: [DONE]\n\n');
     } catch (e) {
+      if (e.code === 'EMPTY_MODEL_RESPONSE' && !hasSentRole) throw e;
       onFinish(completionChars);
       sendDelta({ content: `\n[Error: ${e.message}]` }, 'stop');
       res.write('data: [DONE]\n\n');
     } finally {
-      res.end();
+      if (res.headersSent || hasSentRole) res.end();
     }
   })();
 }
@@ -440,8 +455,47 @@ export async function pipeStreamToResponses(backendStream, res, model, opts = {}
   let buffer = '';
   let text = '';
   let finished = false;
+  let started = false;
   const emit = (event) => {
     res.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
+  };
+  const start = () => {
+    if (started) return;
+    started = true;
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    emit({
+      type: 'response.created',
+      response: {
+        id: responseId,
+        object: 'response',
+        created_at: createdAt,
+        status: 'in_progress',
+        model,
+        output: [],
+      },
+    });
+    emit({
+      type: 'response.in_progress',
+      response: {
+        id: responseId,
+        object: 'response',
+        created_at: createdAt,
+        status: 'in_progress',
+        model,
+        output: [],
+      },
+    });
+    emit({ type: 'response.output_item.added', output_index: 0, item: item('in_progress', '') });
+    emit({
+      type: 'response.content_part.added',
+      item_id: messageId,
+      output_index: 0,
+      content_index: 0,
+      part: { type: 'output_text', text: '', annotations: [] },
+    });
   };
   const item = (status, contentText = text) => ({
     id: messageId,
@@ -452,6 +506,11 @@ export async function pipeStreamToResponses(backendStream, res, model, opts = {}
   });
   const complete = () => {
     if (finished) return;
+    if (!text.trim()) {
+      const error = new Error('model returned a completed response with no content');
+      error.code = 'EMPTY_MODEL_RESPONSE';
+      throw error;
+    }
     finished = true;
     const completionTokens = Math.ceil(text.length / 4);
     opts.onFinish?.(text.length);
@@ -484,41 +543,6 @@ export async function pipeStreamToResponses(backendStream, res, model, opts = {}
     });
   };
 
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  emit({
-    type: 'response.created',
-    response: {
-      id: responseId,
-      object: 'response',
-      created_at: createdAt,
-      status: 'in_progress',
-      model,
-      output: [],
-    },
-  });
-  emit({
-    type: 'response.in_progress',
-    response: {
-      id: responseId,
-      object: 'response',
-      created_at: createdAt,
-      status: 'in_progress',
-      model,
-      output: [],
-    },
-  });
-  emit({ type: 'response.output_item.added', output_index: 0, item: item('in_progress', '') });
-  emit({
-    type: 'response.content_part.added',
-    item_id: messageId,
-    output_index: 0,
-    content_index: 0,
-    part: { type: 'output_text', text: '', annotations: [] },
-  });
-
   const reader = backendStream.getReader();
   try {
     while (true) {
@@ -538,6 +562,7 @@ export async function pipeStreamToResponses(backendStream, res, model, opts = {}
           const event = JSON.parse(data);
           if (event.type === 'response.output_text.delta' && event.delta) {
             const delta = String(event.delta);
+            start();
             text += delta;
             emit({
               type: 'response.output_text.delta',
@@ -552,6 +577,7 @@ export async function pipeStreamToResponses(backendStream, res, model, opts = {}
     }
     complete();
   } catch (error) {
+    if (error.code === 'EMPTY_MODEL_RESPONSE' && !started) throw error;
     if (!finished) {
       finished = true;
       opts.onFinish?.(text.length);
@@ -567,7 +593,7 @@ export async function pipeStreamToResponses(backendStream, res, model, opts = {}
       });
     }
   } finally {
-    res.end();
+    if (res.headersSent || started) res.end();
   }
 }
 
@@ -691,13 +717,15 @@ export async function handleChatCompletions(
           }
         };
         if (responseFormat === 'response') {
-          pipeStreamToResponses(backendRes.body, res, backendModel, { promptTokens, onFinish });
+          await pipeStreamToResponses(backendRes.body, res, backendModel, { promptTokens, onFinish });
+          return who ?? null;
         } else {
           res.setHeader('Content-Type', 'text/event-stream');
           res.setHeader('Cache-Control', 'no-cache');
           res.setHeader('Connection', 'keep-alive');
           res.setHeader('Access-Control-Allow-Origin', '*');
-          pipeStreamToOpenAI(backendRes.body, res, backendModel, id, { onFinish });
+          await pipeStreamToOpenAI(backendRes.body, res, backendModel, id, { onFinish });
+          return who ?? null;
         }
         return who ?? null;
       }
@@ -739,7 +767,7 @@ export async function handleChatCompletions(
       if (res.headersSent) throw e;
       const status = e.message && /^\D*(\d{3})/.exec(e.message);
       const code = status ? Number(status[1]) : 0;
-      const isRetryable = code >= 400 && code < 600;
+      const isRetryable = e.code === 'EMPTY_MODEL_RESPONSE' || (code >= 400 && code < 600);
       if (!isRetryable || tryIndex >= maxTries - 1) break;
     }
   }
