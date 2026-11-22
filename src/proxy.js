@@ -335,6 +335,17 @@ function extractCompletedOutputText(event) {
 
 function createFunctionCallCollector() {
   const calls = new Map();
+  const normalizeArguments = (argumentsText) => {
+    try {
+      const args = JSON.parse(argumentsText);
+      if (args && typeof args === 'object' && !Array.isArray(args)
+        && typeof args.cd === 'string' && !args.cd.trim()) {
+        delete args.cd;
+        return JSON.stringify(args);
+      }
+    } catch {}
+    return argumentsText;
+  };
   const getCall = (item = {}, index) => {
     const key = String(index ?? item.id ?? item.call_id ?? calls.size);
     if (!calls.has(key)) {
@@ -382,7 +393,7 @@ function createFunctionCallCollector() {
           type: 'function',
           function: {
             name: call.name,
-            arguments: call.arguments || '{}',
+            arguments: normalizeArguments(call.arguments || '{}'),
           },
         }));
     },

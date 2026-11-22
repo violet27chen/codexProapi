@@ -135,3 +135,19 @@ test('tool results are serialized as function-call input items for the next turn
   ]);
   assert.equal(input[2].type, 'message');
 });
+
+test('empty optional cd argument is omitted from tool calls', async () => {
+  const result = await parseStreamToCompletion(sseStream([{
+    type: 'response.completed',
+    response: {
+      output: [{
+        type: 'function_call',
+        call_id: 'call_2',
+        name: 'find_files',
+        arguments: '{"pattern":"README*","cd":""}',
+      }],
+    },
+  }]));
+
+  assert.equal(result.toolCalls[0].function.arguments, '{"pattern":"README*"}');
+});
