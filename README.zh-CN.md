@@ -81,7 +81,7 @@ npm run dist:win
 
 ### 操作步骤：
 
-1. 在 http://localhost:1455/ 的“账号”页点击“使用 Codex 登录”、手动粘贴 auth.json 或通过“批量导入”添加账号。
+1. 在 http://localhost:1455/ 的“账号”页选择网页登录、手动粘贴 auth.json、批量导入，或点击“导入本机 Codex”。使用本机导入前，先在运行 Codex Pro API 的设备上执行 `codex login`。
 2. 如需为账号绑定专用代理，点击账号列表中“代理”列的“修改”按钮，输入代理 URL（如 http://127.0.0.1:7890）。
 3. 在客户端中按照上表设置 Base URL 和模型，API Key 随意填写。
 4. 发起对话即可，代理会自动处理轮询、异常重试以及 Token 刷新。

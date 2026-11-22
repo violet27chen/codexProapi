@@ -27,7 +27,7 @@ function app() {
         showBindProxy: false,
         proxyEditIndex: null,
         proxyEditUrl: '',
-        loading: { usage: false, logs: false, models: false, health: false, addAcc: false, settings: false, refreshTokens: false, batchImport: false, bindProxy: false },
+        loading: { usage: false, logs: false, models: false, health: false, addAcc: false, localCodex: false, settings: false, refreshTokens: false, batchImport: false, bindProxy: false },
         toast: null,
         _tt: null,
         endpoints: [
@@ -211,6 +211,27 @@ function app() {
                 if (r.ok && d.ok) { this.toast2('账号添加成功', 'success'); this.showAdd = false; await this.loadAccounts(); }
                 else this.toast2('添加失败：' + (d.error || '未知'), 'error');
             } catch (e) { this.toast2('添加失败：' + e.message, 'error'); } finally { this.loading.addAcc = false; }
+        },
+        async importLocalCodex() {
+            this.loading.localCodex = true;
+            try {
+                const r = await fetch('/api/accounts/import-local', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({}),
+                });
+                const d = await r.json();
+                if (r.ok && d.ok) {
+                    this.toast2('本机 Codex 账号添加成功', 'success');
+                    await this.loadAccounts();
+                } else {
+                    this.toast2('添加失败：' + (d.error || '未知'), 'error');
+                }
+            } catch (e) {
+                this.toast2('添加失败：' + e.message, 'error');
+            } finally {
+                this.loading.localCodex = false;
+            }
         },
         async checkAccountsHealth() {
             this.loading.health = true;

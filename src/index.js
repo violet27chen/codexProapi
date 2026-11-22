@@ -10,6 +10,7 @@ import { handleChatCompletions } from './proxy.js';
 import {
   listAccountsForApi,
   addAccount,
+  addLocalCodexAccount,
   deleteAccount,
   loadAccountsForProxy,
   getAccountsPath,
@@ -419,6 +420,22 @@ app.get('/api/accounts', (req, res) => {
 app.post('/api/accounts', (req, res) => {
   try {
     addAccount(req.body);
+    refreshAuthProvider();
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.post('/api/accounts/import-local', (req, res) => {
+  const remoteAddress = req.socket.remoteAddress || '';
+  const isLoopback = remoteAddress === '::1'
+    || remoteAddress === '127.0.0.1'
+    || remoteAddress.startsWith('::ffff:127.');
+  if (!isLoopback) return res.status(403).json({ error: '本机 Codex 导入仅允许通过本机访问' });
+
+  try {
+    addLocalCodexAccount(req.body || {});
     refreshAuthProvider();
     res.json({ ok: true });
   } catch (e) {

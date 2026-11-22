@@ -75,7 +75,7 @@ Configure your client using the following settings:
 
 ### Steps:
 
-1. Add accounts at http://localhost:1455/ on the Accounts page via OAuth login, manual JSON input, or Batch Import.
+1. Add accounts at http://localhost:1455/ on the Accounts page via OAuth login, manual JSON input, Batch Import, or **Import Local Codex**. For local import, first run `codex login` on the machine running Codex Pro API.
 2. If needed, click Modify next to the account in the proxy column to bind a dedicated proxy (e.g. http://127.0.0.1:7890).
 3. In your client (Cline, Cursor, etc.), specify the Base URL and model names as described above. Set the API Key to any string.
 4. Send requests normally. The proxy handles routing, rotation, and auto-refresh behind the scenes.
