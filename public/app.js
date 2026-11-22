@@ -27,7 +27,7 @@ function app() {
         batchImportResults: null,
         imageCopied: false,
         lf: 'all',
-        loading: { usage: false, logs: false, models: false, health: false, addAcc: false, localCodex: false, localCodexLogin: false, settings: false, refreshTokens: false, batchImport: false },
+        loading: { usage: false, logs: false, models: false, health: false, addAcc: false, localCodexLogin: false, settings: false, refreshTokens: false, batchImport: false },
         toast: null,
         _tt: null,
         endpoints: [
@@ -321,27 +321,6 @@ ${auth}  -d '${JSON.stringify(body)}'`;
                     await this.loadAccounts();
                 } else this.toast2((editing ? '修改' : '添加') + '失败：' + (d.error || '未知'), 'error');
             } catch (e) { this.toast2('账号保存失败：' + e.message, 'error'); } finally { this.loading.addAcc = false; }
-        },
-        async importLocalCodex() {
-            this.loading.localCodex = true;
-            try {
-                const r = await fetch('/api/accounts/import-local', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({}),
-                });
-                const d = await r.json();
-                if (r.ok && d.ok) {
-                    this.toast2(d.updated ? '本机 Codex 账号已更新' : '本机 Codex 账号添加成功', 'success');
-                    await this.loadAccounts();
-                } else {
-                    this.toast2('添加失败：' + (d.error || '未知'), 'error');
-                }
-            } catch (e) {
-                this.toast2('添加失败：' + e.message, 'error');
-            } finally {
-                this.loading.localCodex = false;
-            }
         },
         async startLocalCodexLogin() {
             this.loading.localCodexLogin = true;

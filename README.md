@@ -78,7 +78,7 @@ curl http://localhost:1455/v1/responses \
 
 ### Steps:
 
-1. Add accounts at http://localhost:1455/ on the Accounts page via OAuth login, manual JSON input, Batch Import, or **Log in with Local Codex** to start `codex login` and automatically import the session after success. **Import Existing Login** remains available for an already authenticated local session.
+1. Add accounts at http://localhost:1455/ on the Accounts page via OAuth login, manual JSON input, Batch Import, or **Log in with Local Codex** to start `codex login`. After login succeeds, it automatically imports the local Codex session; an existing authenticated session is reused directly.
 2. If needed, click Modify next to the account in the proxy column to bind a dedicated proxy (e.g. http://127.0.0.1:7890).
 3. In your client (Cline, Cursor, etc.), specify the Base URL and model names as described above. Set the API Key to any string.
 4. Send requests normally. The proxy handles routing, rotation, and auto-refresh behind the scenes.
