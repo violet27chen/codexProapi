@@ -190,7 +190,17 @@ function refreshAuthProvider() {
   return 0;
 }
 
-app.use(express.json({ limit: '50mb' }));
+// JSON body parser — catch SyntaxError so bad JSON returns clean 400 JSON
+app.use((req, res, next) => {
+  express.json({ limit: '50mb' })(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({ error: 'Invalid JSON: ' + err.message });
+    }
+    next();
+  });
+});
+// Fallback: parse form-urlencoded too (some clients send this)
+app.use(express.urlencoded({ extended: true }));
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, Accept');
