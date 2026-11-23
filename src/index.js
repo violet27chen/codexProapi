@@ -92,9 +92,16 @@ function requireAdmin(req, res, next) {
   // 前端页面自己处理（isAdmin 检查）
   next();
 }
-function setAdminCookie(res, timestamp) {
-  const cookie = `${ADMIN_COOKIE}=${timestamp}.${getAdminCookieSignature(timestamp)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${ADMIN_SESSION_TTL_SECONDS}`;
-  res.setHeader('Set-Cookie', cookie + '; Secure');
+function isRequestSecure(req) {
+  const rawProto = String(req.get('x-forwarded-proto') || '').split(',')[0].trim().toLowerCase();
+  if (rawProto) return rawProto === 'https';
+  return !!req.secure;
+}
+function setAdminCookie(req, res, timestamp) {
+  let cookie = `${ADMIN_COOKIE}=${timestamp}.${getAdminCookieSignature(timestamp)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${ADMIN_SESSION_TTL_SECONDS}`;
+  // 仅在确实是 HTTPS 时加 Secure；明文 HTTP（本机/局域网）加了会被浏览器丢弃，导致登录后仍判为未认证
+  if (isRequestSecure(req)) cookie += '; Secure';
+  res.setHeader('Set-Cookie', cookie);
 }
 function clearAdminCookie(res) {
   res.setHeader('Set-Cookie', `${ADMIN_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
@@ -224,7 +231,7 @@ app.post('/api/admin/login', (req, res) => {
   const valid = submittedBytes.length === expectedBytes.length && timingSafeEqual(submittedBytes, expectedBytes);
   if (!valid) return res.status(401).json({ error: '密码错误' });
   const timestamp = String(Math.floor(Date.now() / 1000));
-  setAdminCookie(res, timestamp);
+  setAdminCookie(req, res, timestamp);
   res.json({ ok: true });
 });
 app.post('/api/admin/logout', (req, res) => {
