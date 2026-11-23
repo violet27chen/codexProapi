@@ -62,7 +62,7 @@ const ONECLICK_DOMAINS = ['free.violetteam.cloud', 'qxfy.store', 'deploytools.si
 const ADMIN_COOKIE = 'codexproapi_admin';
 const ADMIN_SESSION_TTL_SECONDS = 12 * 60 * 60; // 12h
 function isAdminConfigured() {
-  return typeof process.env.ADMIN_PASSWORD === 'string' && process.env.ADMIN_PASSWORD.length >= 16;
+  return typeof process.env.ADMIN_PASSWORD === 'string' && process.env.ADMIN_PASSWORD.length >= 8;
 }
 function getAdminCookieSignature(timestamp) {
   return createHmac('sha256', process.env.ADMIN_PASSWORD).update(timestamp).digest('base64url');
