@@ -562,7 +562,12 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
 <!-- Admin login modal -->
 <div
   x-show="showAdminModal"
-  x-transition
+  x-transition:enter="ease-out duration-200"
+  x-transition:enter-start="opacity-0"
+  x-transition:enter-end="opacity-100"
+  x-transition:leave="ease-in duration-150"
+  x-transition:leave-start="opacity-100"
+  x-transition:leave-end="opacity-0"
   class="modal-backdrop"
   @keydown.enter="submitAdminLogin()"
 >
