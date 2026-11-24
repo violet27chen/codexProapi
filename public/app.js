@@ -129,6 +129,93 @@ ${auth}  -d '${JSON.stringify(body)}'`;
   -H "Content-Type: application/json" \\
 ${auth}  -d '${JSON.stringify(body)}'`;
         },
+        get chatPythonExample() {
+            const k = this.cfg.api_key || '<API_KEY>';
+            const model = this.cfg.default_model || this.selectableModels[0]?.id || '<MODEL>';
+            return `from openai import OpenAI
+
+client = OpenAI(api_key="${k}", base_url="${this.baseUrl}/v1")
+
+completion = client.chat.completions.create(
+    model="${model}",
+    messages=[{"role": "user", "content": "你好"}],
+)
+print(completion.choices[0].message.content)`;
+        },
+        get responsesPythonExample() {
+            const k = this.cfg.api_key || '<API_KEY>';
+            const model = this.cfg.default_model || this.selectableModels[0]?.id || '<MODEL>';
+            return `from openai import OpenAI
+
+client = OpenAI(api_key="${k}", base_url="${this.baseUrl}/v1")
+
+response = client.responses.create(
+    model="${model}",
+    input="你好",
+)
+print(response.output_text)`;
+        },
+        get messagesPythonExample() {
+            const k = this.cfg.api_key || '<API_KEY>';
+            const model = this.cfg.default_model || this.selectableModels[0]?.id || '<MODEL>';
+            return `import requests
+
+resp = requests.post(
+    "${this.baseUrl}/v1/messages",
+    headers={
+        "Content-Type": "application/json",
+        "x-api-key": "${k}",
+    },
+    json={
+        "model": "${model}",
+        "max_tokens": 1024,
+        "system": "You are a helpful assistant.",
+        "messages": [{"role": "user", "content": "你好"}],
+    },
+    timeout=120,
+)
+resp.raise_for_status()
+print(resp.json())`;
+        },
+        get imagePythonExample() {
+            const k = this.cfg.api_key || '<API_KEY>';
+            const imageModel = this.models.find(m => m.type === 'image' && m.available !== false)?.id;
+            const modelLine = imageModel ? `    model="${imageModel}",\n` : '';
+            return `from openai import OpenAI
+
+client = OpenAI(api_key="${k}", base_url="${this.baseUrl}/v1")
+
+result = client.images.generate(
+${modelLine}    prompt="一只橘猫坐在窗边",
+    n=1,
+    size="1024x1024",
+)
+print(result.data[0].url)`;
+        },
+        highlightPython(code) {
+            const src = String(code);
+            const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const kw = new Set(['import','from','as','def','return','if','elif','else','for','while','in','not','and','or','with','class','try','except','finally','lambda','pass','break','continue','async','await','raise','yield','global','nonlocal','assert','del','is']);
+            const bools = new Set(['True','False','None']);
+            const re = /(#[^\n]*)|("[^"\n]*"|'[^'\n]*')|(\b\d[\d_]*\.?\d*\b)|([A-Za-z_]\w*)/g;
+            let out = '';
+            let last = 0;
+            let m;
+            while ((m = re.exec(src))) {
+                out += esc(src.slice(last, m.index));
+                const tok = m[0];
+                if (m[1]) out += `<span class="py-com">${esc(tok)}</span>`;
+                else if (m[2]) out += `<span class="py-str">${esc(tok)}</span>`;
+                else if (m[3]) out += `<span class="py-num">${esc(tok)}</span>`;
+                else if (bools.has(tok)) out += `<span class="py-bool">${esc(tok)}</span>`;
+                else if (kw.has(tok)) out += `<span class="py-kw">${esc(tok)}</span>`;
+                else if (/^\s*\(/.test(src.slice(re.lastIndex))) out += `<span class="py-fn">${esc(tok)}</span>`;
+                else out += esc(tok);
+                last = re.lastIndex;
+            }
+            out += esc(src.slice(last));
+            return out;
+        },
         highlightShellCommand(command) {
             return String(command).split('\n').map((line) => {
                 const escaped = line

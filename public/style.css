@@ -528,6 +528,27 @@ textarea {
 .shell-json {
   color: #047857;
 }
+.py-kw {
+  color: #7C3AED;
+  font-weight: 600;
+}
+.py-str {
+  color: #047857;
+}
+.py-num {
+  color: #C2410C;
+}
+.py-com {
+  color: #6A737D;
+  font-style: italic;
+}
+.py-fn {
+  color: #2563EB;
+}
+.py-bool {
+  color: #B91C1C;
+  font-weight: 600;
+}
 
 /* ── Modals & Overlays ── */
 .overlay {

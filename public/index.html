@@ -157,22 +157,28 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
         <div class="card">
           <div class="card-title">OpenAI Chat Completions 调用示例</div>
           <div class="text-muted text-xs mono" x-text="`POST /v1/chat/completions · Base URL: ${baseUrl}/v1`"></div>
-          <pre class="code-block" x-text="curlExample"></pre>
-          <button type="button" class="btn btn-sm mt-2" @click="copyTxt(curlExample)">复制</button>
+          <pre class="code-block" x-html="highlightShellCommand(curlExample)"></pre>
+          <button type="button" class="btn btn-sm mt-2" @click="copyTxt(curlExample)">复制 curl</button>
+          <pre class="code-block mt-2" x-html="highlightPython(chatPythonExample)"></pre>
+          <button type="button" class="btn btn-sm mt-2" @click="copyTxt(chatPythonExample)">复制 Python</button>
         </div>
 
         <div class="card">
           <div class="card-title">OpenAI Responses API 调用示例</div>
           <div class="text-muted text-xs mono" x-text="`POST /v1/responses · Base URL: ${baseUrl}/v1`"></div>
-          <pre class="code-block" x-text="responsesCurlExample"></pre>
-          <button type="button" class="btn btn-sm mt-2" @click="copyTxt(responsesCurlExample)">复制</button>
+          <pre class="code-block" x-html="highlightShellCommand(responsesCurlExample)"></pre>
+          <button type="button" class="btn btn-sm mt-2" @click="copyTxt(responsesCurlExample)">复制 curl</button>
+          <pre class="code-block mt-2" x-html="highlightPython(responsesPythonExample)"></pre>
+          <button type="button" class="btn btn-sm mt-2" @click="copyTxt(responsesPythonExample)">复制 Python</button>
         </div>
 
         <div class="card">
           <div class="card-title">Claude Messages 调用示例（响应为 OpenAI 格式）</div>
           <div class="text-muted text-xs mono" x-text="`POST /v1/messages · Base URL: ${baseUrl}`"></div>
-          <pre class="code-block" x-text="claudeCurlExample"></pre>
-          <button type="button" class="btn btn-sm mt-2" @click="copyTxt(claudeCurlExample)">复制</button>
+          <pre class="code-block" x-html="highlightShellCommand(claudeCurlExample)"></pre>
+          <button type="button" class="btn btn-sm mt-2" @click="copyTxt(claudeCurlExample)">复制 curl</button>
+          <pre class="code-block mt-2" x-html="highlightPython(messagesPythonExample)"></pre>
+          <button type="button" class="btn btn-sm mt-2" @click="copyTxt(messagesPythonExample)">复制 Python</button>
         </div>
 
         <div class="card" x-show="imageModelsAvailable">
@@ -182,6 +188,8 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
             <pre class="code-block" x-html="highlightShellCommand(imageCurlExample)"></pre>
             <button type="button" class="btn btn-sm code-copy-btn" @click="copyImageCommand()" x-text="imageCopied ? '已复制' : '复制命令'"></button>
           </div>
+          <pre class="code-block mt-2" x-html="highlightPython(imagePythonExample)"></pre>
+          <button type="button" class="btn btn-sm mt-2" @click="copyTxt(imagePythonExample)">复制 Python</button>
         </div>
 
         <div class="card">
