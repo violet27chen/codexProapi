@@ -192,23 +192,28 @@ export async function startDeviceAuth() {
 }
 
 async function exchangeDeviceCode(code, code_verifier) {
+  // 与 exchangeCodeForToken 保持一致：oauth/token 标准 OAuth 只接受表单编码，
+  // 用 application/json 会被判为 Invalid request（token_exchange_user_error）。
+  const body = new URLSearchParams({
+    grant_type: 'authorization_code',
+    code,
+    code_verifier,
+    client_id: OAUTH_CLIENT_ID,
+    redirect_uri: deviceRedirectUri(),
+  });
   const res = await fetch(TOKEN_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      grant_type: 'authorization_code',
-      code,
-      code_verifier,
-      client_id: OAUTH_CLIENT_ID,
-      redirect_uri: deviceRedirectUri(),
-    }),
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body.toString(),
   });
-  const json = await res.json().catch(() => ({}));
+  const text = await res.text();
+  let json = {};
+  try { json = text ? JSON.parse(text) : {}; } catch (_) {}
   if (!res.ok) {
-    const raw = json?.error?.message || json?.error_description || json?.message || 'Token 交换失败';
-    const code = json?.error?.code || (typeof json?.error === 'string' ? json?.error : '') || '';
-    const err = new Error(`${raw} (HTTP ${res.status}${code ? ' code=' + code : ''})`);
-    err.code = code || `http_${res.status}`;
+    const raw = json?.error?.message || json?.error_description || json?.message || text?.slice(0, 160) || 'Token 交换失败';
+    const ecode = json?.error?.code || (typeof json?.error === 'string' ? json?.error : '') || '';
+    const err = new Error(`${raw} (HTTP ${res.status}${ecode ? ' code=' + ecode : ''})`);
+    err.code = ecode || `http_${res.status}`;
     err.status = res.status;
     throw err;
   }

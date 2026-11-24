@@ -47,10 +47,11 @@ test('pollDeviceAuthOnce: authorization_code -> oauth/token 换 token 成功', a
   globalThis.fetch = async (url, opts) => {
     if (String(url).includes('/deviceauth/token')) return jsonResp({ authorization_code: 'ac1', code_verifier: 'cv1' });
     if (String(url).endsWith('/oauth/token')) {
-      const body = JSON.parse(opts.body);
-      assert.equal(body.grant_type, 'authorization_code');
-      assert.equal(body.code, 'ac1');
-      assert.equal(body.code_verifier, 'cv1');
+      const body = new URLSearchParams(opts.body);
+      assert.equal(opts.headers['Content-Type'], 'application/x-www-form-urlencoded');
+      assert.equal(body.get('grant_type'), 'authorization_code');
+      assert.equal(body.get('code'), 'ac1');
+      assert.equal(body.get('code_verifier'), 'cv1');
       return jsonResp({
         access_token: 'eyJhbGciOiJIUzI1NiJ9.' + Buffer.from(JSON.stringify({ chatgpt_account_id: 'acct-9' })).toString('base64url') + '.s',
         refresh_token: 'rt-1',
