@@ -388,10 +388,11 @@ app.get('/auth/login', async (req, res) => {
     // 明文 HTTP 不加 Secure，否则浏览器不保存该 cookie，前端查不到状态
     const secure = isRequestSecure(req) ? '; Secure' : '';
     res.setHeader('Set-Cookie', `${DEVICE_COOKIE}=${stateId}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${Math.floor(DEVICE_TTL_MS / 1000)}${secure}`);
-    const target = `${d.verification_uri}?user_code=${encodeURIComponent(d.user_code)}`;
-    res.redirect(302, target);
+    const verification_url = `${d.verification_uri}?user_code=${encodeURIComponent(d.user_code)}`;
+    // 返回 JSON，由前端在新标签页打开授权页（不再把当前 app 页 302 跳走）
+    res.json({ ok: true, user_code: d.user_code, verification_uri: d.verification_uri, verification_url, message: rec.message });
   } catch (e) {
-    res.redirect(302, `/?oauth=error&msg=${encodeURIComponent(e.message || 'device_login_failed')}#/accounts`);
+    res.status(400).json({ ok: false, message: e.message || 'device_login_failed' });
   }
 });
 

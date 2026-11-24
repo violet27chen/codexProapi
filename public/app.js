@@ -444,7 +444,28 @@ print(result.data[0].url)`;
             this.af = { mode: 'json', name: '', authJson: '', access_token: '', account_id: '', refresh_token: '', proxy: '' };
         },
         startBrowserOAuthLogin() {
-            window.location.assign('/auth/login');
+            // 在用户手势内同步开一个空白新标签页，避免被弹窗拦截；拿到授权 URL 后再赋址
+            const win = window.open('', '_blank');
+            (async () => {
+                try {
+                    const r = await fetch('/auth/login');
+                    const d = await r.json();
+                    if (d.ok) {
+                        const url = d.verification_url || (d.verification_uri + '?user_code=' + encodeURIComponent(d.user_code));
+                        if (win) win.location.href = url; else window.open(url, '_blank', 'noopener');
+                        this.deviceLogin = { status: 'pending', message: d.message || '请在新标签页完成授权', user_code: d.user_code, verification_uri: d.verification_uri };
+                        this.showAdd = false;
+                        this.page = 'accounts';
+                        this.toast2('已在新标签页打开授权页，验证码：' + d.user_code, 'info');
+                    } else {
+                        if (win) win.close();
+                        this.toast2('打开授权页失败：' + (d.message || '未知'), 'error');
+                    }
+                } catch (e) {
+                    if (win) win.close();
+                    this.toast2('打开授权页失败：' + e.message, 'error');
+                }
+            })();
         },
         async checkDeviceAuth() {
             try {

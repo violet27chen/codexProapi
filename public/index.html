@@ -219,8 +219,12 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
       <div class="content" x-show="page==='accounts'" x-cloak>
         <div class="card" x-show="deviceLogin.status==='pending'" style="margin-bottom:12px">
           <div class="card-title">等待 OpenAI 授权完成</div>
-          <p class="text-muted text-sm" x-text="deviceLogin.message || '请在已打开的 OpenAI 页面完成登录与授权，完成后账号会自动添加。'"></p>
-          <p class="text-sm" style="margin-top:6px">验证码：<span class="mono" x-text="deviceLogin.user_code"></span></p>
+          <p class="text-muted text-sm" x-text="deviceLogin.message || '请在新打开的 OpenAI 标签页完成登录与授权，完成后账号会自动添加。'"></p>
+          <div class="flex gap-2 items-center mt-2" style="flex-wrap:wrap">
+            <span class="text-sm">验证码：</span>
+            <span class="mono" style="font-size:1.25rem;font-weight:600;letter-spacing:1px" x-text="deviceLogin.user_code"></span>
+            <button type="button" class="btn btn-sm" @click="copyTxt(deviceLogin.user_code)">复制验证码</button>
+          </div>
           <div class="flex gap-2 mt-2">
             <button type="button" class="btn btn-sm" @click="window.open(deviceLogin.verification_uri + '?user_code=' + encodeURIComponent(deviceLogin.user_code), '_blank')">重新打开授权页</button>
           </div>
