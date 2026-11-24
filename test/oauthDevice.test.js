@@ -82,3 +82,16 @@ test('pollDeviceAuthOnce: access_denied 透传为 error', async () => {
   assert.equal(r.status, 'error');
   assert.match(r.message, /denied/);
 });
+
+test('pollDeviceAuthOnce: 瞬时错误(Invalid request. Please try again later.) 视为 pending 继续轮询', async () => {
+  globalThis.fetch = async () => jsonResp({ error: { code: 'invalid_request_error', message: 'Invalid request. Please try again later.' } }, 400);
+  const r = await pollDeviceAuthOnce({ device_auth_id: 'd1', user_code: 'ABCD-1234' });
+  assert.equal(r.status, 'pending');
+});
+
+test('pollDeviceAuthOnce: 429/5xx 视为 pending', async () => {
+  globalThis.fetch = async () => jsonResp({ error: { message: 'Too Many Requests' } }, 429);
+  assert.equal((await pollDeviceAuthOnce({ device_auth_id: 'd1', user_code: 'x' })).status, 'pending');
+  globalThis.fetch = async () => jsonResp({ error: { message: 'Bad Gateway' } }, 502);
+  assert.equal((await pollDeviceAuthOnce({ device_auth_id: 'd1', user_code: 'x' })).status, 'pending');
+});

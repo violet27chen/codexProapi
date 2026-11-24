@@ -214,21 +214,38 @@ async function exchangeDeviceCode(code, code_verifier) {
 }
 
 // 单次轮询设备授权。返回 {status:'pending'|'success'|'error', ...}
+// 注意：OpenAI 在等待授权期间会返回 403 deviceauth_authorization_pending；
+// 此外还可能返回「可重试的瞬时错误」（如 400 "Invalid request. Please try again later."、429、5xx），
+// 这类必须当作 pending 继续轮询，绝不能当终态失败——否则一次抖动就会误报"登录失败"。
 export async function pollDeviceAuthOnce({ device_auth_id, user_code }) {
-  const res = await fetch(DEVICE_TOKEN_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ device_auth_id, user_code }),
-  });
+  let res;
+  try {
+    res = await fetch(DEVICE_TOKEN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ device_auth_id, user_code }),
+    });
+  } catch (_) {
+    return { status: 'pending' }; // 网络抖动：下个间隔继续轮询
+  }
   const data = await res.json().catch(() => ({}));
   const errCode = data?.error?.code;
   const errMsg = data?.error?.message || data?.error_description || '';
-  if (res.status === 403 || errCode === 'deviceauth_authorization_pending' || /pending/i.test(errMsg)) {
+
+  // 仍在等待用户在浏览器完成授权
+  if (res.status === 403 || errCode === 'deviceauth_authorization_pending' || /authorization is pending/i.test(errMsg)) {
     return { status: 'pending' };
   }
+
   if (!res.ok) {
-    return { status: 'error', message: errMsg || `设备授权轮询失败 (HTTP ${res.status})`, code: errCode };
+    // 可重试的瞬时错误：限流 / 服务端 / 明确提示"稍后再试"
+    const retryable = res.status === 429 || res.status >= 500
+      || /try again later|temporar|rate.?limit|slow down|server error|service unavailable/i.test(errMsg);
+    if (retryable) return { status: 'pending' };
+    // 终态失败（用户拒绝 / 授权过期 / 凭据无效等）
+    return { status: 'error', message: `${errMsg || '设备授权轮询失败'} (HTTP ${res.status}${errCode ? ' ' + errCode : ''})`, code: errCode };
   }
+
   // 授权成功：有的实现直接返回 token，有的返回 authorization_code + code_verifier 再交换
   if (data.access_token) return { status: 'success', ...parseCodexTokens(data) };
   const code = data.authorization_code || data.code;
