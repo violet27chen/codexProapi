@@ -205,9 +205,11 @@ async function exchangeDeviceCode(code, code_verifier) {
   });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const msg = json?.error?.message || json?.error_description || `Token 交换失败 (HTTP ${res.status})`;
-    const err = new Error(msg);
-    err.code = json?.error?.code || json?.error || `http_${res.status}`;
+    const raw = json?.error?.message || json?.error_description || json?.message || 'Token 交换失败';
+    const code = json?.error?.code || (typeof json?.error === 'string' ? json?.error : '') || '';
+    const err = new Error(`${raw} (HTTP ${res.status}${code ? ' code=' + code : ''})`);
+    err.code = code || `http_${res.status}`;
+    err.status = res.status;
     throw err;
   }
   return parseCodexTokens(json);
