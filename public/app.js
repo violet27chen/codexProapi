@@ -28,7 +28,7 @@ function app() {
         batchImportResults: null,
         imageCopied: false,
         lf: 'all',
-        loading: { usage: false, logs: false, models: false, health: false, addAcc: false, localCodexLogin: false, settings: false, refreshTokens: false, batchImport: false },
+        loading: { usage: false, logs: false, models: false, health: false, addAcc: false, localCodexLogin: false, settings: false, refreshTokens: false, batchImport: false, exportAccounts: false, importAccountsFile: false },
         toast: null,
         _tt: null,
         // admin auth
@@ -84,12 +84,15 @@ function app() {
         get totalTokens() {
             return this.usageData.reduce((s, u) => s + (u.used_tokens || 0), 0);
         },
+        get baseUrl() {
+            try { return location.origin.replace(/\/+$/, ''); } catch { return ''; }
+        },
         get curlExample() {
             const k = this.cfg.api_key;
             const auth = k ? `  -H "Authorization: Bearer ${k}" \\\n` : '';
             const model = this.cfg.default_model || this.selectableModels[0]?.id || '自动获取的模型 ID';
             const body = { model, messages: [{ role: 'user', content: '你好' }], stream: false };
-            return `curl -sS http://localhost:1455/v1/chat/completions \\
+            return `curl -sS ${this.baseUrl}/v1/chat/completions \\
   -H "Content-Type: application/json" \\
 ${auth}  -d '${JSON.stringify(body)}'`;
         },
@@ -104,7 +107,7 @@ ${auth}  -d '${JSON.stringify(body)}'`;
                 messages: [{ role: 'user', content: '你好' }],
                 stream: false,
             };
-            return `curl -sS http://localhost:1455/v1/messages \\
+            return `curl -sS ${this.baseUrl}/v1/messages \\
   -H "Content-Type: application/json" \\
 ${auth}  -d '${JSON.stringify(body)}'`;
         },
@@ -113,7 +116,7 @@ ${auth}  -d '${JSON.stringify(body)}'`;
             const auth = k ? `  -H "Authorization: Bearer ${k}" \\\n` : '';
             const model = this.cfg.default_model || this.selectableModels[0]?.id || '自动获取的模型 ID';
             const body = { model, input: '你好', stream: false };
-            return `curl -sS http://localhost:1455/v1/responses \\
+            return `curl -sS ${this.baseUrl}/v1/responses \\
   -H "Content-Type: application/json" \\
 ${auth}  -d '${JSON.stringify(body)}'`;
         },
@@ -122,7 +125,7 @@ ${auth}  -d '${JSON.stringify(body)}'`;
             const auth = k ? `  -H "Authorization: Bearer ${k}" \\\n` : '';
             const imageModel = this.models.find(m => m.type === 'image' && m.available !== false)?.id;
             const body = { prompt: '一只橘猫坐在窗边', n: 1, size: '1024x1024', ...(imageModel ? { model: imageModel } : {}) };
-            return `curl -sS http://localhost:1455/v1/images/generations \\
+            return `curl -sS ${this.baseUrl}/v1/images/generations \\
   -H "Content-Type: application/json" \\
 ${auth}  -d '${JSON.stringify(body)}'`;
         },
@@ -547,6 +550,63 @@ ${auth}  -d '${JSON.stringify(body)}'`;
                 this.toast2('文本读取成功，已填充至输入框', 'success');
             };
             reader.readAsText(file);
+        },
+        async exportAccounts() {
+            this.loading.exportAccounts = true;
+            try {
+                const r = await fetch('/api/accounts/export');
+                if (!r.ok) {
+                    const d = await r.json().catch(() => ({}));
+                    this.toast2('导出失败：' + (d.error || '未知'), 'error');
+                    return;
+                }
+                const text = await r.text();
+                const stamp = new Date().toISOString().slice(0, 10);
+                const blob = new Blob([text], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `codex-accounts-${stamp}.txt`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+                const n = text.split(/\r?\n/).filter(Boolean).length;
+                this.toast2(`已导出 ${n} 个 Refresh Token`, 'success');
+            } catch (e) {
+                this.toast2('导出失败：' + e.message, 'error');
+            } finally {
+                this.loading.exportAccounts = false;
+            }
+        },
+        async importAccountsFile(event) {
+            const input = event.target;
+            const file = input.files && input.files[0];
+            input.value = '';
+            if (!file) return;
+            this.loading.importAccountsFile = true;
+            try {
+                const text = await file.text();
+                const tokens = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+                if (tokens.length === 0) { this.toast2('文件为空或没有有效的 Refresh Token', 'error'); return; }
+                const r = await fetch('/api/accounts/batch-import', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ refreshTokens: tokens }),
+                });
+                const d = await r.json();
+                if (r.ok && d.ok) {
+                    const failed = (d.results || []).filter(x => x.status === 'error').length;
+                    this.toast2(`导入完成：新增 ${d.imported} 个，更新 ${d.updated || 0} 个` + (failed ? `，失败 ${failed} 个` : ''), 'success');
+                    await this.loadAccounts();
+                } else {
+                    this.toast2('导入失败：' + (d.error || '未知'), 'error');
+                }
+            } catch (e) {
+                this.toast2('导入失败：' + e.message, 'error');
+            } finally {
+                this.loading.importAccountsFile = false;
+            }
         },
 
         /* ── utils ── */

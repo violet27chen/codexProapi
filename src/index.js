@@ -23,6 +23,7 @@ import {
   updateAccountProxy,
   updateAccount,
   setAccountBlocked,
+  exportAccounts,
 } from './accounts.js';
 import { getAuthorizeUrl, exchangeCodeForToken } from './oauth.js';
 import { getLocalCodexLoginStatus, startLocalCodexLogin } from './localCodexLogin.js';
@@ -774,6 +775,18 @@ app.post('/api/accounts/batch-import', async (req, res) => {
     updated: importSummary.updated,
     results,
   });
+});
+
+// ── 导出账号（Refresh Token 列表，.txt）──
+app.get('/api/accounts/export', (req, res) => {
+  const tokens = exportAccounts();
+  if (tokens.length === 0) {
+    return res.status(404).json({ error: '没有可导出的账号（均缺少 Refresh Token）' });
+  }
+  const stamp = new Date().toISOString().slice(0, 10);
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="codex-accounts-${stamp}.txt"`);
+  res.send(tokens.join('\n'));
 });
 
 // ── 图像生成 ──

@@ -88,6 +88,9 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
               本机 Codex 登录并添加
             </button>
             <button type="button" class="btn" @click="showBatchImport=true; batchImportText=''; batchImportResults=null">批量导入</button>
+            <button type="button" class="btn" @click="$refs.importFileInput.click()" :class="{'btn-loading':loading.importAccountsFile}">导入账号文件</button>
+            <input type="file" accept=".txt,text/plain" x-ref="importFileInput" @change="importAccountsFile($event)" style="display:none">
+            <button type="button" class="btn" @click="exportAccounts()" :class="{'btn-loading':loading.exportAccounts}">导出账号</button>
             <button type="button" class="btn btn-primary" @click="showAdd=true; resetAddForm()">+ 添加账号</button>
           </div>
           <!-- models actions -->
@@ -153,28 +156,28 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
 
         <div class="card">
           <div class="card-title">OpenAI Chat Completions 调用示例</div>
-          <div class="text-muted text-xs mono">POST /v1/chat/completions · Base URL: http://localhost:1455/v1</div>
+          <div class="text-muted text-xs mono" x-text="`POST /v1/chat/completions · Base URL: ${baseUrl}/v1`"></div>
           <pre class="code-block" x-text="curlExample"></pre>
           <button type="button" class="btn btn-sm mt-2" @click="copyTxt(curlExample)">复制</button>
         </div>
 
         <div class="card">
           <div class="card-title">OpenAI Responses API 调用示例</div>
-          <div class="text-muted text-xs mono">POST /v1/responses · Base URL: http://localhost:1455/v1</div>
+          <div class="text-muted text-xs mono" x-text="`POST /v1/responses · Base URL: ${baseUrl}/v1`"></div>
           <pre class="code-block" x-text="responsesCurlExample"></pre>
           <button type="button" class="btn btn-sm mt-2" @click="copyTxt(responsesCurlExample)">复制</button>
         </div>
 
         <div class="card">
           <div class="card-title">Claude Messages 调用示例（响应为 OpenAI 格式）</div>
-          <div class="text-muted text-xs mono">POST /v1/messages · Base URL: http://localhost:1455</div>
+          <div class="text-muted text-xs mono" x-text="`POST /v1/messages · Base URL: ${baseUrl}`"></div>
           <pre class="code-block" x-text="claudeCurlExample"></pre>
           <button type="button" class="btn btn-sm mt-2" @click="copyTxt(claudeCurlExample)">复制</button>
         </div>
 
         <div class="card" x-show="imageModelsAvailable">
           <div class="card-title">图片生成调用示例（模型自动获取）</div>
-          <div class="text-muted text-xs mono">POST /v1/images/generations · Base URL: http://localhost:1455</div>
+          <div class="text-muted text-xs mono" x-text="`POST /v1/images/generations · Base URL: ${baseUrl}`"></div>
           <div class="code-block-wrap mt-2">
             <pre class="code-block" x-html="highlightShellCommand(imageCurlExample)"></pre>
             <button type="button" class="btn btn-sm code-copy-btn" @click="copyImageCommand()" x-text="imageCopied ? '已复制' : '复制命令'"></button>

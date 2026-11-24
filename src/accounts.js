@@ -72,6 +72,29 @@ export function listAccountsForApi() {
 }
 
 /**
+ * 导出账号的 Refresh Token 列表（每个一行），用于备份/迁移；与批量导入格式一致。
+ * 注意：包含敏感凭据，调用方必须做管理员鉴权。
+ */
+export function exportAccounts() {
+  const path = getAccountsPath();
+  if (!existsSync(path)) return [];
+  let data;
+  try {
+    data = JSON.parse(readFileSync(path, 'utf8'));
+  } catch {
+    return [];
+  }
+  const list = Array.isArray(data) ? data : (data.accounts || []);
+  const tokens = [];
+  for (const item of list) {
+    const rt = item.refresh_token || item.tokens?.refresh_token;
+    const str = rt ? String(rt).trim() : '';
+    if (str) tokens.push(str);
+  }
+  return tokens;
+}
+
+/**
  * 读取完整账号列表（含 token），供代理轮询使用
  */
 export function loadAccountsForProxy({ includeBlocked = false } = {}) {
