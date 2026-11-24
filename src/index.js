@@ -25,6 +25,7 @@ import {
   setAccountBlocked,
   exportAccounts,
 } from './accounts.js';
+import { hydrateFromCloud, queuePush, initPersistTimers } from './persist.js';
 import { getAuthorizeUrl, exchangeCodeForToken, startDeviceAuth, pollDeviceAuthOnce } from './oauth.js';
 import { getLocalCodexLoginStatus, startLocalCodexLogin } from './localCodexLogin.js';
 import { isAccountUnavailable } from './accountStatus.js';
@@ -140,6 +141,7 @@ function saveConfig(obj) {
         : 60,
   };
   writeFileSync(p, JSON.stringify(out, null, 2), 'utf8');
+  queuePush(p);
 }
 
 function randomLocalPart(len = 10) {
@@ -972,9 +974,21 @@ function startServer() {
 
 export { app, startServer, PORT };
 
+// 云端持久化引导：先从 Supabase 拉取状态写回本地文件，再启动服务并注册刷盘钩子。
+// 未配置 Supabase 时 hydrateFromCloud / initPersistTimers 均为 no-op，行为与原先一致。
+async function boot() {
+  await hydrateFromCloud();
+  const server = startServer();
+  initPersistTimers();
+  return server;
+}
+
 const isMain =
   process.argv[1] &&
   pathToFileURL(resolve(process.argv[1])).href === new URL(import.meta.url).href;
 if (isMain) {
-  startServer();
+  boot().catch((e) => {
+    console.error('[boot] 启动失败:', e);
+    process.exit(1);
+  });
 }

@@ -5,6 +5,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { queuePush } from './persist.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const dataDir = process.env.CODEX_DATA_DIR || join(__dirname, '..', 'data');
@@ -41,6 +42,7 @@ function saveExhausted(map) {
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
     const obj = Object.fromEntries(map);
     writeFileSync(EXHAUSTED_FILE, JSON.stringify(obj, null, 2), 'utf8');
+    queuePush(EXHAUSTED_FILE);
   } catch (e) {
   }
 }

@@ -15,6 +15,10 @@ services:
       # 管理员密码（≥ 16 位）。留空则跳过认证（开发模式）。
       # 生产部署强烈建议设置：ADMIN_PASSWORD=your-16char-random-secret
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      # 云端状态持久化（Supabase）。留空则纯文件模式（本地行为不变）。
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
+      SUPABASE_TABLE: ${SUPABASE_TABLE:-codex_app_state}
     volumes:
       - codex-data:/data
     healthcheck:

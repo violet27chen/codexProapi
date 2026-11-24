@@ -5,6 +5,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { queuePush } from './persist.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const dataDir = process.env.CODEX_DATA_DIR || join(__dirname, '..', 'data');
@@ -31,6 +32,7 @@ function save(state) {
     const dir = dirname(USAGE_FILE);
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
     writeFileSync(USAGE_FILE, JSON.stringify(state, null, 2), 'utf8');
+    queuePush(USAGE_FILE);
   } catch (e) {
   }
 }
@@ -143,6 +145,7 @@ function saveImageUsage(data) {
     const dir = dirname(IMAGE_USAGE_FILE);
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
     writeFileSync(IMAGE_USAGE_FILE, JSON.stringify(data, null, 2), 'utf8');
+    queuePush(IMAGE_USAGE_FILE);
   } catch (e) {}
 }
 

@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { parseAuthFromJson, resolveAuthPath } from './auth.js';
+import { queuePush } from './persist.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_ACCOUNTS_FILE = join(__dirname, '..', 'data', 'accounts.json');
@@ -134,6 +135,7 @@ export function setAccountBlocked(index, blocked) {
   }
   list[accountIndex].blocked = blocked;
   writeFileSync(path, JSON.stringify({ accounts: list }, null, 2), 'utf8');
+  queuePush(path);
   return { ok: true, blocked };
 }
 
@@ -198,10 +200,12 @@ export function addAccount(body) {
       ...(existingTokens ? { tokens: existingTokens } : {}),
     };
     writeFileSync(path, JSON.stringify({ accounts: list }, null, 2), 'utf8');
+    queuePush(path);
     return { ok: true, updated: true, duplicate: true, index: existingIndex };
   }
   list.push(entry);
   writeFileSync(path, JSON.stringify({ accounts: list }, null, 2), 'utf8');
+  queuePush(path);
   return { ok: true, updated: false, duplicate: false, index: list.length - 1 };
 }
 
@@ -255,6 +259,7 @@ export function deleteAccount(index) {
   if (i >= 0 && i < list.length) {
     list.splice(i, 1);
     writeFileSync(path, JSON.stringify({ accounts: list }, null, 2), 'utf8');
+    queuePush(path);
   }
 }
 
@@ -304,6 +309,7 @@ export function batchAddAccounts(entries) {
     }
   }
   writeFileSync(path, JSON.stringify({ accounts: list }, null, 2), 'utf8');
+  queuePush(path);
   return { ok: true, imported, updated };
 }
 
@@ -320,6 +326,7 @@ export function updateAccountProxy(index, proxyUrl) {
   if (i >= 0 && i < list.length) {
     list[i].proxy = proxyUrl ? String(proxyUrl).trim() : null;
     writeFileSync(path, JSON.stringify({ accounts: list }, null, 2), 'utf8');
+    queuePush(path);
     return { ok: true };
   }
   throw new Error('未找到指定账号');
@@ -379,6 +386,7 @@ export function updateAccount(index, changes = {}) {
 
   list[i] = next;
   writeFileSync(path, JSON.stringify({ accounts: list }, null, 2), 'utf8');
+  queuePush(path);
   return { ok: true };
 }
 
