@@ -25,7 +25,7 @@ import {
   setAccountBlocked,
   exportAccounts,
 } from './accounts.js';
-import { getAuthorizeUrl, exchangeCodeForToken } from './oauth.js';
+import { getAuthorizeUrl, exchangeCodeForToken, startDeviceAuth, pollDeviceAuthOnce } from './oauth.js';
 import { getLocalCodexLoginStatus, startLocalCodexLogin } from './localCodexLogin.js';
 import { isAccountUnavailable } from './accountStatus.js';
 import { getRemainingPct, getUsedTokens, QUOTA } from './usageTracker.js';
@@ -331,10 +331,88 @@ function getOAuthRedirectUri(req) {
 
 const OPENAI_CREATE_ACCOUNT_URL = 'https://auth.openai.com/create-account';
 
-app.get('/auth/login', (req, res) => {
-  const redirectUri = getOAuthRedirectUri(req);
-  const { url } = getAuthorizeUrl(redirectUri);
-  res.redirect(302, url);
+// ── Codex 设备码登录（浏览器跳转 OpenAI 官方页，后端轮询截获并加账号）──
+const DEVICE_COOKIE = 'codexproapi_device';
+const DEVICE_TTL_MS = 15 * 60 * 1000;
+const devicePending = new Map(); // stateId -> {device_auth_id,user_code,verification_uri,interval,status,message,createdAt,timer}
+
+function startDevicePoller(stateId) {
+  const rec = devicePending.get(stateId);
+  if (!rec) return;
+  const startedAt = Date.now();
+  rec.timer = setInterval(async () => {
+    if (!rec || rec.status !== 'pending') { clearInterval(rec.timer); rec.timer = null; return; }
+    if (Date.now() - startedAt > DEVICE_TTL_MS) {
+      clearInterval(rec.timer); rec.timer = null;
+      rec.status = 'expired'; rec.message = '设备授权超时，请重新发起登录';
+      return;
+    }
+    try {
+      const r = await pollDeviceAuthOnce({ device_auth_id: rec.device_auth_id, user_code: rec.user_code });
+      if (r.status === 'pending') return;
+      clearInterval(rec.timer); rec.timer = null;
+      if (r.status === 'success') {
+        try {
+          addAccount({ access_token: r.access_token, account_id: r.account_id, refresh_token: r.refresh_token, source: 'oauth', name: r.email || undefined });
+          refreshAuthProvider();
+          rec.status = 'success'; rec.message = '登录成功，账号已添加';
+        } catch (e) {
+          rec.status = 'error'; rec.message = '账号写入失败：' + e.message;
+        }
+      } else {
+        rec.status = 'error'; rec.message = r.message || '设备授权失败';
+      }
+    } catch (_) { /* 网络抖动：下个间隔继续轮询 */ }
+  }, (rec.interval || 5) * 1000);
+  rec.timer.unref?.();
+}
+
+app.get('/auth/login', async (req, res) => {
+  try {
+    const d = await startDeviceAuth();
+    const stateId = randomUUID();
+    const rec = {
+      device_auth_id: d.device_auth_id,
+      user_code: d.user_code,
+      verification_uri: d.verification_uri,
+      interval: d.interval,
+      status: 'pending',
+      message: '请在打开的 OpenAI 页面完成授权',
+      createdAt: Date.now(),
+      timer: null,
+    };
+    devicePending.set(stateId, rec);
+    startDevicePoller(stateId);
+    // 明文 HTTP 不加 Secure，否则浏览器不保存该 cookie，前端查不到状态
+    const secure = isRequestSecure(req) ? '; Secure' : '';
+    res.setHeader('Set-Cookie', `${DEVICE_COOKIE}=${stateId}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${Math.floor(DEVICE_TTL_MS / 1000)}${secure}`);
+    const target = `${d.verification_uri}?user_code=${encodeURIComponent(d.user_code)}`;
+    res.redirect(302, target);
+  } catch (e) {
+    res.redirect(302, `/?oauth=error&msg=${encodeURIComponent(e.message || 'device_login_failed')}#/accounts`);
+  }
+});
+
+app.get('/api/accounts/device-auth/status', (req, res) => {
+  const cookies = String(req.headers.cookie || '').split(';').map((c) => c.trim());
+  const val = cookies.find((c) => c.startsWith(`${DEVICE_COOKIE}=`))?.slice(DEVICE_COOKIE.length + 1);
+  if (!val) return res.json({ status: 'none' });
+  const rec = devicePending.get(val);
+  if (!rec) return res.json({ status: 'none' });
+  res.json({
+    status: rec.status,
+    message: rec.message,
+    user_code: rec.user_code,
+    verification_uri: rec.verification_uri,
+  });
+  if (rec.status !== 'pending') {
+    // 终态稍后清理，给前端一次读取机会
+    const cleanup = setTimeout(() => {
+      try { clearInterval(rec.timer); } catch (_) {}
+      devicePending.delete(val);
+    }, 30000);
+    cleanup.unref?.();
+  }
 });
 
 app.get('/auth/create-account', (req, res) => {

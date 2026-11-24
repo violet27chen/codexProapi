@@ -38,6 +38,7 @@ function app() {
         adminPwd: '',
         adminErr: '',
         adminSubmitting: false,
+        deviceLogin: { status: 'none', message: '', user_code: '', verification_uri: '' },
         endpoints: [
             { m: 'POST', path: '/v1/chat/completions', desc: '对话补全' },
             { m: 'POST', path: '/v1/responses', desc: 'OpenAI Responses API' },
@@ -269,6 +270,8 @@ print(result.data[0].url)`;
                 this.loadModels(),
             ]);
             this.handleOAuth();
+            this.checkDeviceAuth();
+            setInterval(() => this.checkDeviceAuth(), 5000);
             this.loadRefreshStatus();
             setInterval(() => {
                 if (this.page === 'logs' || this.page === 'dashboard') this.loadLogs();
@@ -442,6 +445,20 @@ print(result.data[0].url)`;
         },
         startBrowserOAuthLogin() {
             window.location.assign('/auth/login');
+        },
+        async checkDeviceAuth() {
+            try {
+                const d = await (await fetch('/api/accounts/device-auth/status')).json();
+                const prev = this.deviceLogin.status;
+                this.deviceLogin = d || { status: 'none' };
+                if (d.status === 'success' && prev !== 'success') {
+                    this.toast2(d.message || 'Codex 登录成功，账号已添加', 'success');
+                    this.showAdd = false;
+                    await this.loadAccounts();
+                } else if ((d.status === 'error' || d.status === 'expired') && prev === 'pending') {
+                    this.toast2('Codex 设备登录失败：' + (d.message || '未知'), 'error');
+                }
+            } catch (_) {}
         },
         editAccount(acc) {
             this.accountEditIndex = acc.index;

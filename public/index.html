@@ -217,6 +217,15 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
 
       <!-- ════ ACCOUNTS ════ -->
       <div class="content" x-show="page==='accounts'" x-cloak>
+        <div class="card" x-show="deviceLogin.status==='pending'" style="margin-bottom:12px">
+          <div class="card-title">等待 OpenAI 授权完成</div>
+          <p class="text-muted text-sm" x-text="deviceLogin.message || '请在已打开的 OpenAI 页面完成登录与授权，完成后账号会自动添加。'"></p>
+          <p class="text-sm" style="margin-top:6px">验证码：<span class="mono" x-text="deviceLogin.user_code"></span></p>
+          <div class="flex gap-2 mt-2">
+            <button type="button" class="btn btn-sm" @click="window.open(deviceLogin.verification_uri + '?user_code=' + encodeURIComponent(deviceLogin.user_code), '_blank')">重新打开授权页</button>
+          </div>
+        </div>
+
         <div class="card" x-show="localCodexLoginStatus.status!=='idle'" style="margin-bottom:12px">
           <div class="card-title" x-text="localCodexLoginStatus.message || 'Codex 登录状态'"></div>
           <pre class="mono text-xs text-muted" x-show="localCodexLoginStatus.output" x-text="localCodexLoginStatus.output" style="white-space:pre-wrap; overflow-wrap:anywhere; max-height:180px; overflow:auto"></pre>

@@ -127,3 +127,118 @@ export async function exchangeCodeForToken(code, redirectUri, state) {
 
   return { access_token, account_id, refresh_token: json.refresh_token, email };
 }
+
+/* ── OpenAI Codex 设备码流程（Device Code Flow）──
+ * 端点为 OpenAI 的自定义 deviceauth 接口（非标准 RFC8628 路径），已实测：
+ *   1) POST deviceauth/usercode {client_id, scope} -> {device_auth_id, user_code, interval, expires_at}
+ *   2) 用户在浏览器打开 auth.openai.com/codex/device 输入 user_code 授权
+ *   3) POST deviceauth/token {device_auth_id, user_code} -> 未授权: 403 code=deviceauth_authorization_pending；
+ *      授权后: 返回 authorization_code + code_verifier（或直接返回 token）
+ *   4) POST oauth/token authorization_code {code, code_verifier, client_id, redirect_uri} -> token
+ * redirect_uri 黑盒不可测，默认沿用 codex 的 localhost 回调，可用环境变量覆盖。
+ */
+const DEVICE_USERCODE_URL = 'https://auth.openai.com/api/accounts/deviceauth/usercode';
+const DEVICE_TOKEN_URL = 'https://auth.openai.com/api/accounts/deviceauth/token';
+const DEVICE_VERIFY_URL = 'https://auth.openai.com/codex/device';
+const DEVICE_SCOPE = 'openid profile email offline_access';
+
+function deviceRedirectUri() {
+  return process.env.CODEX_DEVICE_REDIRECT_URI || 'http://localhost:1455/auth/callback';
+}
+
+function parseCodexTokens(json) {
+  const access_token = json.access_token;
+  if (!access_token) throw new Error('响应中缺少 access_token');
+  let account_id = json.account_id || json.user?.id || json.user_id;
+  let email = json.user?.email || json.email || null;
+  if (json.id_token) {
+    try {
+      const payload = JSON.parse(Buffer.from(json.id_token.split('.')[1], 'base64url').toString());
+      if (!account_id) account_id = payload.sub || payload.account_id || payload.user_id || payload.chatgpt_account_id;
+      if (!email) email = payload.email || payload.name || payload.preferred_username || null;
+    } catch (_) {}
+  }
+  if (!account_id) {
+    // access_token 里通常带 chatgpt_account_id / organizations
+    try {
+      const payload = JSON.parse(Buffer.from(String(access_token).split('.')[1], 'base64url').toString());
+      if (!account_id) account_id = payload.chatgpt_account_id || payload['https://api.openai.com/auth']?.chatgpt_account_id || payload.sub;
+    } catch (_) {}
+  }
+  if (!account_id) account_id = 'unknown';
+  return { access_token, account_id, refresh_token: json.refresh_token, email };
+}
+
+export async function startDeviceAuth() {
+  const res = await fetch(DEVICE_USERCODE_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ client_id: OAUTH_CLIENT_ID, scope: DEVICE_SCOPE }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data?.error?.message || `设备码申请失败 (HTTP ${res.status})`);
+  }
+  if (!data.device_auth_id || !data.user_code) {
+    throw new Error('设备码响应缺少 device_auth_id/user_code');
+  }
+  return {
+    device_auth_id: data.device_auth_id,
+    user_code: data.user_code,
+    verification_uri: DEVICE_VERIFY_URL,
+    expires_at: data.expires_at || null,
+    interval: Math.max(3, Number(data.interval) || 5),
+  };
+}
+
+async function exchangeDeviceCode(code, code_verifier) {
+  const res = await fetch(TOKEN_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      grant_type: 'authorization_code',
+      code,
+      code_verifier,
+      client_id: OAUTH_CLIENT_ID,
+      redirect_uri: deviceRedirectUri(),
+    }),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = json?.error?.message || json?.error_description || `Token 交换失败 (HTTP ${res.status})`;
+    const err = new Error(msg);
+    err.code = json?.error?.code || json?.error || `http_${res.status}`;
+    throw err;
+  }
+  return parseCodexTokens(json);
+}
+
+// 单次轮询设备授权。返回 {status:'pending'|'success'|'error', ...}
+export async function pollDeviceAuthOnce({ device_auth_id, user_code }) {
+  const res = await fetch(DEVICE_TOKEN_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ device_auth_id, user_code }),
+  });
+  const data = await res.json().catch(() => ({}));
+  const errCode = data?.error?.code;
+  const errMsg = data?.error?.message || data?.error_description || '';
+  if (res.status === 403 || errCode === 'deviceauth_authorization_pending' || /pending/i.test(errMsg)) {
+    return { status: 'pending' };
+  }
+  if (!res.ok) {
+    return { status: 'error', message: errMsg || `设备授权轮询失败 (HTTP ${res.status})`, code: errCode };
+  }
+  // 授权成功：有的实现直接返回 token，有的返回 authorization_code + code_verifier 再交换
+  if (data.access_token) return { status: 'success', ...parseCodexTokens(data) };
+  const code = data.authorization_code || data.code;
+  const verifier = data.code_verifier;
+  if (code && verifier) {
+    try {
+      return { status: 'success', ...await exchangeDeviceCode(code, verifier) };
+    } catch (e) {
+      return { status: 'error', message: e.message, code: e.code };
+    }
+  }
+  return { status: 'error', message: '设备授权响应格式未知（无 access_token 也无 authorization_code）' };
+}
