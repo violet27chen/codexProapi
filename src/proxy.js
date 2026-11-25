@@ -1,4 +1,6 @@
 import { randomUUID } from 'crypto';
+import { lookup } from 'node:dns/promises';
+import { isIP } from 'node:net';
 import { loadAuth } from './auth.js';
 import { markAccountUnavailable } from './accountStatus.js';
 import { recordUsage, clearUsage } from './usageTracker.js';
@@ -24,6 +26,90 @@ const BROWSER_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
 };
 
+function isPublicIp(address) {
+  const version = isIP(address);
+  if (version === 4) {
+    const octets = address.split('.').map(Number);
+    const [a, b, c] = octets;
+    return !(a === 0 || a === 10 || a === 127 || a >= 224
+      || (a === 100 && b >= 64 && b <= 127)
+      || (a === 169 && b === 254)
+      || (a === 172 && b >= 16 && b <= 31)
+      || (a === 192 && (b === 168 || b === 88 && c === 99 || b === 0 && (c === 0 || c === 2)))
+      || (a === 198 && (b === 18 || b === 19 || b === 51 && c === 100))
+      || (a === 203 && b === 0 && c === 113));
+  }
+  if (version === 6) {
+    const normalized = address.toLowerCase();
+    if (normalized.startsWith('::ffff:')) return false;
+    const firstHextet = Number.parseInt(normalized.split(':')[0] || '0', 16);
+    return firstHextet >= 0x2000 && firstHextet <= 0x3fff
+      && !normalized.startsWith('2001:db8:')
+      && !normalized.startsWith('2001:10:');
+  }
+  return false;
+}
+
+async function assertPublicImageUrl(rawUrl) {
+  const url = new URL(rawUrl);
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) {
+    throw new Error('图片 URL 必须是无凭据的 HTTP(S) 公网地址');
+  }
+  const hostname = url.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  if (hostname === 'localhost' || hostname.endsWith('.localhost') || hostname.endsWith('.local')) {
+    throw new Error('不允许读取本机或局域网图片地址');
+  }
+  const addresses = isIP(hostname) ? [{ address: hostname }] : await lookup(hostname, { all: true, verbatim: true });
+  if (!addresses.length || addresses.some(({ address }) => !isPublicIp(address))) {
+    throw new Error('图片 URL 必须解析到公网 IP');
+  }
+  return url;
+}
+
+async function downloadExternalImage(rawUrl, proxyUrl) {
+  const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
+  let url = rawUrl;
+  for (let redirects = 0; redirects <= 3; redirects++) {
+    url = await assertPublicImageUrl(url);
+    const response = await fetch(url, {
+      signal: AbortSignal.timeout(15000),
+      dispatcher: getProxyAgent(proxyUrl),
+      redirect: 'manual',
+    });
+    if ([301, 302, 303, 307, 308].includes(response.status)) {
+      const location = response.headers.get('location');
+      await response.body?.cancel();
+      if (!location || redirects === 3) throw new Error('图片 URL 重定向次数过多或缺少目标地址');
+      url = new URL(location, url).toString();
+      continue;
+    }
+    if (!response.ok) throw new Error(`下载图片失败 (${response.status})`);
+    const mime = (response.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+    if (!mime.startsWith('image/')) throw new Error('图片 URL 返回的内容不是图片');
+    const declaredLength = Number(response.headers.get('content-length'));
+    if (Number.isFinite(declaredLength) && declaredLength > MAX_IMAGE_BYTES) {
+      await response.body?.cancel();
+      throw new Error('图片文件超过 20 MB 限制');
+    }
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error('图片响应为空');
+    const chunks = [];
+    let total = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > MAX_IMAGE_BYTES) {
+        await reader.cancel();
+        throw new Error('图片文件超过 20 MB 限制');
+      }
+      chunks.push(Buffer.from(value));
+    }
+    return `data:${mime};base64,${Buffer.concat(chunks, total).toString('base64')}`;
+  }
+  throw new Error('图片 URL 重定向次数过多');
+}
+
 async function getMessageContentParts(msg, proxyUrl) {
   const content = [];
   const raw = msg.content;
@@ -42,16 +128,8 @@ async function getMessageContentParts(msg, proxyUrl) {
         const detail = c.image_url?.detail || 'auto';
         if (!url) continue;
         // 外部 URL 下载转 base64（Codex 不支持外部 HTTP URL）
-        if (url.startsWith('http://') || url.startsWith('https://')) {
-          try {
-            const dispatcher = getProxyAgent(proxyUrl);
-            const imgRes = await fetch(url, { signal: AbortSignal.timeout(15000), dispatcher });
-            if (imgRes.ok) {
-              const buf = Buffer.from(await imgRes.arrayBuffer());
-              const mime = imgRes.headers.get('content-type') || 'image/jpeg';
-              url = `data:${mime};base64,${buf.toString('base64')}`;
-            }
-          } catch (_) {}
+        if (/^https?:\/\//i.test(url)) {
+          url = await downloadExternalImage(url, proxyUrl);
         }
         if (url) content.push({ type: 'image_url', url, detail });
       } else if (c.type === 'text' || c.text != null) {
@@ -561,6 +639,9 @@ export function formatOpenAIResponsesResult({
   promptTokens,
   completionTokens,
   toolCalls = [],
+  tools = [],
+  toolChoice = 'auto',
+  parallelToolCalls = false,
   status = 'completed',
 }) {
   return {
@@ -584,14 +665,14 @@ export function formatOpenAIResponsesResult({
         arguments: call.function.arguments,
       })),
     ],
-    parallel_tool_calls: false,
+    parallel_tool_calls: parallelToolCalls,
     previous_response_id: null,
     reasoning: { effort: null, summary: null },
     store: false,
     temperature: null,
     text: { format: { type: 'text' } },
-    tool_choice: 'auto',
-    tools: [],
+    tool_choice: toolChoice,
+    tools,
     top_p: 1,
     truncation: 'disabled',
     usage: {
@@ -710,6 +791,9 @@ export async function pipeStreamToResponses(backendStream, res, model, opts = {}
         promptTokens: opts.promptTokens || 0,
         completionTokens,
         toolCalls,
+        tools: opts.tools || [],
+        toolChoice: opts.toolChoice ?? 'auto',
+        parallelToolCalls: false,
       }),
     });
   };
@@ -905,7 +989,12 @@ export async function handleChatCompletions(
           }
         };
         if (responseFormat === 'response') {
-          await pipeStreamToResponses(backendRes.body, res, backendModel, { promptTokens, onFinish });
+          await pipeStreamToResponses(backendRes.body, res, backendModel, {
+            promptTokens,
+            onFinish,
+            tools: openaiReq.tools || [],
+            toolChoice: openaiReq.tool_choice ?? 'auto',
+          });
           return who ?? null;
         } else {
           res.setHeader('Content-Type', 'text/event-stream');
@@ -952,6 +1041,8 @@ export async function handleChatCompletions(
           promptTokens,
           completionTokens,
           toolCalls,
+          tools: openaiReq.tools || [],
+          toolChoice: openaiReq.tool_choice ?? 'auto',
         }));
       } else {
         res.json(completion);

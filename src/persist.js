@@ -118,7 +118,7 @@ export async function hydrateFromCloud() {
   const list = Array.isArray(rows) ? rows : [];
   let restored = 0;
   for (const r of list) {
-    if (!r || typeof r.key !== 'string' || r.content == null) continue;
+    if (!r || typeof r.key !== 'string' || !PERSISTED.includes(r.key) || r.content == null) continue;
     const p = targetPathFor(r.key);
     try {
       ensureDir(p);

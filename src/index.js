@@ -213,7 +213,7 @@ app.use((req, res, next) => {
 app.use(express.urlencoded({ extended: true }));
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, Accept');
+  res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, Accept, x-api-key');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
   if (req.method === 'OPTIONS') return res.sendStatus(200);
   next();
@@ -302,7 +302,7 @@ app.use((req, res, next) => {
   next();
 });
 
-const API_KEY_PATHS = ['/v1/models', '/v1/chat/completions', '/v1/responses', '/v1/messages', '/chat/completions', '/responses'];
+const API_KEY_PATHS = ['/v1/models', '/v1/chat/completions', '/v1/responses', '/v1/messages', '/v1/images/generations', '/chat/completions', '/responses'];
 app.use((req, res, next) => {
   if (!API_KEY_PATHS.includes(req.path)) return next();
   const cfg = loadConfig();

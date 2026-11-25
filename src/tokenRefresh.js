@@ -16,6 +16,7 @@ import { existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { getProxyAgent } from './proxyAgent.js';
+import { queuePush } from './persist.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = process.env.CODEX_DATA_DIR || join(__dirname, '..', 'data');
@@ -43,6 +44,7 @@ async function saveAccounts(list) {
   const dir = dirname(path);
   if (!existsSync(dir)) await mkdir(dir, { recursive: true });
   await writeFile(path, JSON.stringify({ accounts: list }, null, 2), 'utf8');
+  queuePush(path);
 }
 
 /**
