@@ -84,7 +84,7 @@ docker compose logs -f
 
 ### OpenAI 两种请求格式
 
-Chat Completions 使用 `messages` 和 `/v1/chat/completions`；Responses API 使用文本/图片 `input` 和 `/v1/responses`，非流式响应为标准 `response` 对象，`stream: true` 时返回 Responses 事件流。Responses API 暂不支持 tools / function calling。
+Chat Completions 使用 `messages` 和 `/v1/chat/completions`；Responses API 使用文本/图片 `input` 和 `/v1/responses`，支持 function tools、工具调用结果续轮；非流式响应为标准 `response` 对象，`stream: true` 时返回 Responses 事件流。当前不支持内置工具（如 web search）和并行工具调用。
 
 ```bash
 # Chat Completions

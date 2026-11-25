@@ -88,7 +88,7 @@ Configure your client using the following settings:
 
 ### OpenAI request formats
 
-Chat Completions uses `messages` at `/v1/chat/completions`; the Responses API uses text/image `input` at `/v1/responses`. Non-streaming Responses requests return a standard `response` object, and `stream: true` returns Responses events. Responses API tools / function calling are not supported yet.
+Chat Completions uses `messages` at `/v1/chat/completions`; the Responses API uses text/image `input` at `/v1/responses` and supports function tools, including tool-result follow-up turns. Non-streaming requests return a standard `response` object, and `stream: true` returns Responses events. Built-in tools (such as web search) and parallel tool calls are not supported.
 
 ```bash
 # Chat Completions

@@ -269,6 +269,14 @@ export function normalizeOpenAIResponsesRequest(body) {
         addMessage('user', item);
       } else if (item && typeof item === 'object' && (item.type === 'message' || item.role)) {
         addMessage(item.role || 'user', item.content);
+      } else if (item?.type === 'function_call') {
+        messages.push({ role: 'assistant', content: null, tool_calls: [{
+          id: item.call_id || item.id,
+          type: 'function',
+          function: { name: item.name, arguments: item.arguments || '{}' },
+        }] });
+      } else if (item?.type === 'function_call_output') {
+        messages.push({ role: 'tool', tool_call_id: item.call_id, content: item.output ?? '' });
       } else {
         throw new Error('Responses API 的 input 仅支持文本/图片消息');
       }
@@ -277,13 +285,17 @@ export function normalizeOpenAIResponsesRequest(body) {
     throw new Error('Responses API 请求必须包含 string 或 array 类型的 input');
   }
 
-  if (Array.isArray(source.tools) && source.tools.length) {
-    throw new Error('Responses API 暂不支持 tools / function calling');
+  const tools = Array.isArray(source.tools) ? source.tools : [];
+  if (tools.some((tool) => tool?.type !== 'function' || !tool.name)) {
+    throw new Error('Responses API 目前仅支持 function 类型工具');
   }
   return {
     model: typeof source.model === 'string' ? source.model : '',
     messages,
     stream: source.stream === true,
+    tools,
+    tool_choice: source.tool_choice,
+    parallel_tool_calls: source.parallel_tool_calls === true,
   };
 }
 
@@ -548,6 +560,7 @@ export function formatOpenAIResponsesResult({
   createdAt,
   promptTokens,
   completionTokens,
+  toolCalls = [],
   status = 'completed',
 }) {
   return {
@@ -560,13 +573,17 @@ export function formatOpenAIResponsesResult({
     instructions: null,
     max_output_tokens: null,
     model,
-    output: [{
-      id: messageId,
-      type: 'message',
-      status,
-      role: 'assistant',
-      content: [{ type: 'output_text', text, annotations: [] }],
-    }],
+    output: [
+      ...(text ? [{ id: messageId, type: 'message', status, role: 'assistant', content: [{ type: 'output_text', text, annotations: [] }] }] : []),
+      ...toolCalls.map((call) => ({
+        id: `fc_${call.id}`,
+        type: 'function_call',
+        status: 'completed',
+        call_id: call.id,
+        name: call.function.name,
+        arguments: call.function.arguments,
+      })),
+    ],
     parallel_tool_calls: false,
     previous_response_id: null,
     reasoning: { effort: null, summary: null },
@@ -595,10 +612,11 @@ export async function pipeStreamToResponses(backendStream, res, model, opts = {}
   let text = '';
   let finished = false;
   let started = false;
+  const functionCalls = createFunctionCallCollector();
   const emit = (event) => {
     res.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
   };
-  const start = () => {
+  const start = (includeMessage = true) => {
     if (started) return;
     started = true;
     res.setHeader('Content-Type', 'text/event-stream');
@@ -627,6 +645,7 @@ export async function pipeStreamToResponses(backendStream, res, model, opts = {}
         output: [],
       },
     });
+    if (!includeMessage) return;
     emit({ type: 'response.output_item.added', output_index: 0, item: item('in_progress', '') });
     emit({
       type: 'response.content_part.added',
@@ -645,29 +664,41 @@ export async function pipeStreamToResponses(backendStream, res, model, opts = {}
   });
   const complete = () => {
     if (finished) return;
-    if (!text.trim()) {
+    const toolCalls = functionCalls.getCalls();
+    if (!text.trim() && toolCalls.length === 0) {
       const error = new Error('model returned a completed response with no content');
       error.code = 'EMPTY_MODEL_RESPONSE';
       throw error;
     }
     finished = true;
-    const completionTokens = Math.ceil(text.length / 4);
-    opts.onFinish?.(text.length);
-    emit({
+    start(text.length > 0);
+    const completionChars = text.length + toolCalls.reduce((sum, call) => sum + call.function.arguments.length, 0);
+    const completionTokens = Math.ceil(completionChars / 4);
+    opts.onFinish?.(completionChars);
+    if (text) emit({
       type: 'response.output_text.done',
       item_id: messageId,
       output_index: 0,
       content_index: 0,
       text,
     });
-    emit({
+    if (text) emit({
       type: 'response.content_part.done',
       item_id: messageId,
       output_index: 0,
       content_index: 0,
       part: { type: 'output_text', text, annotations: [] },
     });
-    emit({ type: 'response.output_item.done', output_index: 0, item: item('completed') });
+    if (text) emit({ type: 'response.output_item.done', output_index: 0, item: item('completed') });
+    let outputIndex = text ? 1 : 0;
+    for (const call of toolCalls) {
+      const functionItem = { id: `fc_${call.id}`, type: 'function_call', status: 'completed', call_id: call.id, name: call.function.name, arguments: call.function.arguments };
+      emit({ type: 'response.output_item.added', output_index: outputIndex, item: { ...functionItem, status: 'in_progress', arguments: '' } });
+      if (call.function.arguments) emit({ type: 'response.function_call_arguments.delta', item_id: functionItem.id, output_index: outputIndex, delta: call.function.arguments });
+      emit({ type: 'response.function_call_arguments.done', item_id: functionItem.id, output_index: outputIndex, arguments: call.function.arguments });
+      emit({ type: 'response.output_item.done', output_index: outputIndex, item: functionItem });
+      outputIndex++;
+    }
     emit({
       type: 'response.completed',
       response: formatOpenAIResponsesResult({
@@ -678,6 +709,7 @@ export async function pipeStreamToResponses(backendStream, res, model, opts = {}
         createdAt,
         promptTokens: opts.promptTokens || 0,
         completionTokens,
+        toolCalls,
       }),
     });
   };
@@ -685,6 +717,7 @@ export async function pipeStreamToResponses(backendStream, res, model, opts = {}
   const reader = backendStream.getReader();
   try {
     const parseEvent = (event) => {
+      functionCalls.add(event);
       if (event.type === '[DONE]') {
         complete();
         return;
@@ -918,6 +951,7 @@ export async function handleChatCompletions(
           createdAt: completion.created,
           promptTokens,
           completionTokens,
+          toolCalls,
         }));
       } else {
         res.json(completion);
