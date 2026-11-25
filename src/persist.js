@@ -61,9 +61,13 @@ function ensureDir(p) {
 async function rest(method, { body, prefer, qs } = {}) {
   const headers = {
     apikey: SUPABASE_KEY,
-    Authorization: `Bearer ${SUPABASE_KEY}`,
     'Content-Type': 'application/json',
   };
+  // New Supabase sb_* API keys are opaque API keys, not JWTs. Sending one as
+  // a Bearer token makes Supabase's JWT parser reject the request.
+  if (!SUPABASE_KEY.startsWith('sb_')) {
+    headers.Authorization = `Bearer ${SUPABASE_KEY}`;
+  }
   if (prefer) headers.Prefer = prefer;
   const init = { method, headers };
   if (body !== undefined) init.body = JSON.stringify(body);
