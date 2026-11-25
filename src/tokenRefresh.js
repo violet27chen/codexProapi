@@ -23,6 +23,8 @@ const DATA_DIR = process.env.CODEX_DATA_DIR || join(__dirname, '..', 'data');
 
 const TOKEN_URL = 'https://auth.openai.com/oauth/token';
 const CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann';
+const refreshInFlight = new Map();
+let accountWriteQueue = Promise.resolve();
 
 function getAccountsPath() {
   return process.env.CODEX_ACCOUNTS_FILE || join(DATA_DIR, 'accounts.json');
@@ -45,6 +47,37 @@ async function saveAccounts(list) {
   if (!existsSync(dir)) await mkdir(dir, { recursive: true });
   await writeFile(path, JSON.stringify({ accounts: list }, null, 2), 'utf8');
   queuePush(path);
+}
+
+function updateRefreshedAccount(accountId, accountIndex, result) {
+  const update = accountWriteQueue.then(async () => {
+    const list = await loadAccounts();
+    const index = accountId
+      ? list.findIndex((item) => (item.account_id || item.tokens?.account_id) === accountId)
+      : accountIndex;
+    const account = list[index];
+    if (!account) return false;
+
+    if (account.access_token !== undefined || !account.tokens?.access_token) {
+      account.access_token = result.access_token;
+    }
+    if (account.tokens?.access_token !== undefined) {
+      account.tokens.access_token = result.access_token;
+    }
+    if (result.refresh_token) {
+      if (account.refresh_token !== undefined || !account.tokens?.refresh_token) {
+        account.refresh_token = result.refresh_token;
+      }
+      if (account.tokens?.refresh_token !== undefined) {
+        account.tokens.refresh_token = result.refresh_token;
+      }
+    }
+    list[index] = account;
+    await saveAccounts(list);
+    return true;
+  });
+  accountWriteQueue = update.catch(() => {});
+  return update;
 }
 
 /**
@@ -89,6 +122,11 @@ export async function refreshTokenForAccount(accountIndex) {
   const account = list[accountIndex];
   if (!account) return null;
 
+  const accountId = account.account_id || account.tokens?.account_id || '';
+  const refreshKey = accountId || `index:${accountIndex}`;
+  const pending = refreshInFlight.get(refreshKey);
+  if (pending) return pending;
+
   const refreshToken = account.refresh_token ||
     account.tokens?.refresh_token ||
     null;
@@ -98,39 +136,24 @@ export async function refreshTokenForAccount(accountIndex) {
     return null;
   }
 
-  const proxyUrl = account.proxy || null;
+  const operation = (async () => {
+    try {
+      const result = await refreshAccessToken(refreshToken, account.proxy || null);
+      const persisted = await updateRefreshedAccount(accountId, accountIndex, result);
+      if (!persisted) throw new Error('账号在刷新过程中已被删除');
+      const mask = accountId ? accountId.slice(0, 8) + '…' : `账号${accountIndex + 1}`;
+      console.log(`[TokenRefresh] ${mask} token 已刷新`);
+      return result.access_token;
+    } catch (e) {
+      console.error(`[TokenRefresh] 账号 ${accountIndex} 刷新失败:`, e.message);
+      return null;
+    }
+  })();
+  refreshInFlight.set(refreshKey, operation);
   try {
-    const result = await refreshAccessToken(refreshToken, proxyUrl);
-
-    // 更新 accounts.json
-    if (account.access_token !== undefined) {
-      account.access_token = result.access_token;
-    }
-    if (account.tokens?.access_token !== undefined) {
-      account.tokens.access_token = result.access_token;
-    }
-    // 保存新的 refresh_token（如果 provider 返回了）
-    if (result.refresh_token && result.refresh_token !== refreshToken) {
-      if (account.refresh_token !== undefined) {
-        account.refresh_token = result.refresh_token;
-      }
-      if (account.tokens?.refresh_token !== undefined) {
-        account.tokens.refresh_token = result.refresh_token;
-      }
-    }
-
-    list[accountIndex] = account;
-    await saveAccounts(list);
-
-    const mask = account.account_id
-      ? account.account_id.slice(0, 8) + '…'
-      : `账号${accountIndex + 1}`;
-    console.log(`[TokenRefresh] ${mask} token 已刷新`);
-
-    return result.access_token;
-  } catch (e) {
-    console.error(`[TokenRefresh] 账号 ${accountIndex} 刷新失败:`, e.message);
-    return null;
+    return await operation;
+  } finally {
+    if (refreshInFlight.get(refreshKey) === operation) refreshInFlight.delete(refreshKey);
   }
 }
 

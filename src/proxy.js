@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
+import { Agent } from 'undici';
 import { loadAuth } from './auth.js';
 import { markAccountUnavailable } from './accountStatus.js';
 import { recordUsage, clearUsage } from './usageTracker.js';
@@ -59,51 +60,85 @@ async function assertPublicImageUrl(rawUrl) {
   if (hostname === 'localhost' || hostname.endsWith('.localhost') || hostname.endsWith('.local')) {
     throw new Error('不允许读取本机或局域网图片地址');
   }
-  const addresses = isIP(hostname) ? [{ address: hostname }] : await lookup(hostname, { all: true, verbatim: true });
+  const addresses = isIP(hostname) ? [{ address: hostname, family: isIP(hostname) }] : await lookup(hostname, { all: true, verbatim: true });
   if (!addresses.length || addresses.some(({ address }) => !isPublicIp(address))) {
     throw new Error('图片 URL 必须解析到公网 IP');
   }
-  return url;
+  return { url, address: addresses[0] };
 }
 
 async function downloadExternalImage(rawUrl, proxyUrl) {
   const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
   let url = rawUrl;
   for (let redirects = 0; redirects <= 3; redirects++) {
-    url = await assertPublicImageUrl(url);
-    const response = await fetch(url, {
-      signal: AbortSignal.timeout(15000),
-      dispatcher: getProxyAgent(proxyUrl),
-      redirect: 'manual',
+    if (proxyUrl) throw new Error('配置账号代理时不支持外部图片 URL；请改用图片 URL 或 Base64 data URL');
+    const validated = await assertPublicImageUrl(url);
+    url = validated.url;
+    const { address, family } = validated.address;
+    const dispatcher = new Agent({
+      connect: {
+        lookup(_hostname, options, callback) {
+          if (options?.all) callback(null, [{ address, family }]);
+          else callback(null, address, family);
+        },
+      },
     });
+    let response;
+    try {
+      response = await fetch(url, {
+        signal: AbortSignal.timeout(15000),
+        dispatcher,
+        redirect: 'manual',
+      });
+    } catch (error) {
+      await dispatcher.close();
+      throw error;
+    }
     if ([301, 302, 303, 307, 308].includes(response.status)) {
       const location = response.headers.get('location');
       await response.body?.cancel();
+      await dispatcher.close();
       if (!location || redirects === 3) throw new Error('图片 URL 重定向次数过多或缺少目标地址');
       url = new URL(location, url).toString();
       continue;
     }
-    if (!response.ok) throw new Error(`下载图片失败 (${response.status})`);
+    if (!response.ok) {
+      await response.body?.cancel();
+      await dispatcher.close();
+      throw new Error(`下载图片失败 (${response.status})`);
+    }
     const mime = (response.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
-    if (!mime.startsWith('image/')) throw new Error('图片 URL 返回的内容不是图片');
+    if (!mime.startsWith('image/')) {
+      await response.body?.cancel();
+      await dispatcher.close();
+      throw new Error('图片 URL 返回的内容不是图片');
+    }
     const declaredLength = Number(response.headers.get('content-length'));
     if (Number.isFinite(declaredLength) && declaredLength > MAX_IMAGE_BYTES) {
       await response.body?.cancel();
+      await dispatcher.close();
       throw new Error('图片文件超过 20 MB 限制');
     }
     const reader = response.body?.getReader();
-    if (!reader) throw new Error('图片响应为空');
+    if (!reader) {
+      await dispatcher.close();
+      throw new Error('图片响应为空');
+    }
     const chunks = [];
     let total = 0;
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      total += value.byteLength;
-      if (total > MAX_IMAGE_BYTES) {
-        await reader.cancel();
-        throw new Error('图片文件超过 20 MB 限制');
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        total += value.byteLength;
+        if (total > MAX_IMAGE_BYTES) {
+          await reader.cancel();
+          throw new Error('图片文件超过 20 MB 限制');
+        }
+        chunks.push(Buffer.from(value));
       }
-      chunks.push(Buffer.from(value));
+    } finally {
+      await dispatcher.close();
     }
     return `data:${mime};base64,${Buffer.concat(chunks, total).toString('base64')}`;
   }

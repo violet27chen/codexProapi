@@ -28,7 +28,7 @@ import {
 import { hydrateFromCloud, queuePush, initPersistTimers } from './persist.js';
 import { getAuthorizeUrl, exchangeCodeForToken, startDeviceAuth, pollDeviceAuthOnce } from './oauth.js';
 import { getLocalCodexLoginStatus, startLocalCodexLogin } from './localCodexLogin.js';
-import { isAccountUnavailable } from './accountStatus.js';
+import { isAccountUnavailable, isImageQuotaExhausted } from './accountStatus.js';
 import { getRemainingPct, getUsedTokens, QUOTA } from './usageTracker.js';
 import { fetchCodexUsage } from './quota.js';
 import { generateImage, getCachedImage, fetchImageBytes } from './imagegen.js';
@@ -871,25 +871,37 @@ app.get('/api/accounts/export', (req, res) => {
 });
 
 // ── 图像生成 ──
+let nextImageAccount = 0;
 app.post('/v1/images/generations', async (req, res) => {
   try {
-    const auths = loadAccountsForProxy();
-    if (auths.length === 0) {
+    const accounts = loadAccountsForProxy();
+    if (accounts.length === 0) {
       return res.status(400).json({ error: { message: '未配置账号，请先添加 Codex 账号' } });
     }
-    // 选第一个可用账号
-    let auth = null;
-    for (const a of auths) {
-      if (!isAccountUnavailable(a.accountId)) { auth = a; break; }
-    }
-    if (!auth) {
-      return res.status(503).json({ error: { message: '所有账号不可用' } });
+    const candidates = accounts.filter((account) =>
+      !isAccountUnavailable(account.accountId) && !isImageQuotaExhausted(account.accountId));
+    if (candidates.length === 0) {
+      return res.status(503).json({ error: { message: '没有可用的生图账号（账号可能不可用或额度已耗尽）' } });
     }
     const imageRequest = { ...req.body };
     // Codex 后端自动用 gpt-image-2，不需要指定独立 image 模型
     // 如果客户端没指定 model，就透传给后端让它决定
     if (!imageRequest.model) delete imageRequest.model;
-    const result = await generateImage(imageRequest, auth);
+    const startIndex = nextImageAccount % candidates.length;
+    let result;
+    let lastError;
+    for (let offset = 0; offset < candidates.length; offset++) {
+      const accountIndex = (startIndex + offset) % candidates.length;
+      try {
+        result = await generateImage(imageRequest, candidates[accountIndex]);
+        nextImageAccount = (accountIndex + 1) % candidates.length;
+        break;
+      } catch (error) {
+        lastError = error;
+        console.warn(`[ImageGen] 账号 ${candidates[accountIndex].accountId?.slice(0, 8) || accountIndex} 失败，尝试下一个账号:`, error.message);
+      }
+    }
+    if (!result) throw lastError || new Error('所有生图账号均请求失败');
     // 将 _token 替换为本地代理 URL
     const host = req.get('host') || `localhost:${PORT}`;
     const proto = (req.get('x-forwarded-proto') || 'http').split(',')[0].trim();

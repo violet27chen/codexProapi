@@ -135,6 +135,8 @@ export async function hydrateFromCloud() {
 // 脏数据队列：key -> 最近一次写入的绝对路径
 const dirty = new Map();
 let timer = null;
+let dirtyRevision = 0;
+let flushPromise = null;
 
 function scheduleFlush() {
   if (timer) clearTimeout(timer);
@@ -150,29 +152,29 @@ export function queuePush(absPath) {
   if (!enabled || !absPath) return;
   const key = basename(absPath);
   if (!PERSISTED.includes(key)) return; // 只同步已知状态文件
-  dirty.set(key, absPath);
+  dirty.set(key, { absPath, revision: ++dirtyRevision });
   scheduleFlush();
 }
 
 /** 立即把队列中的脏文件 upsert 到云端；成功清空、失败保留待重试。 */
-export async function flushPending() {
+async function flushPendingOnce() {
   if (!enabled || dirty.size === 0) return { pushed: 0 };
   const entries = [...dirty.entries()];
   const rows = [];
-  const okKeys = [];
-  for (const [key, absPath] of entries) {
+  const completed = [];
+  for (const [key, entry] of entries) {
     let content;
     try {
-      if (!existsSync(absPath)) {
-        okKeys.push(key); // 文件不存在（例如被删空），移除追踪
+      if (!existsSync(entry.absPath)) {
+        completed.push([key, entry.revision]); // 文件不存在（例如被删空），移除追踪
         continue;
       }
-      content = readFileSync(absPath, 'utf8');
+      content = readFileSync(entry.absPath, 'utf8');
     } catch {
       continue; // 读取异常，保留待下次重试
     }
     rows.push({ key, content, updated_at: new Date().toISOString() });
-    okKeys.push(key);
+    completed.push([key, entry.revision]);
   }
   if (rows.length) {
     try {
@@ -186,8 +188,20 @@ export async function flushPending() {
       return { pushed: 0, error: e.message };
     }
   }
-  for (const k of okKeys) dirty.delete(k);
+  for (const [key, revision] of completed) {
+    if (dirty.get(key)?.revision === revision) dirty.delete(key);
+  }
   return { pushed: rows.length };
+}
+
+export function flushPending() {
+  if (!enabled || dirty.size === 0) return Promise.resolve({ pushed: 0 });
+  if (flushPromise) return flushPromise;
+  flushPromise = flushPendingOnce().finally(() => {
+    flushPromise = null;
+    if (dirty.size > 0) scheduleFlush();
+  });
+  return flushPromise;
 }
 
 let timersInited = false;
