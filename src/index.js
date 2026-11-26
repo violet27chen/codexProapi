@@ -471,7 +471,17 @@ app.get('/v1/models', (req, res) => {
 });
 
 app.get('/api/models', (req, res) => {
-  res.json(getModelsStatus());
+  const status = getModelsStatus();
+  // 并入启用提供商已声明的模型（即时、不参与 Codex 探测）
+  const provModels = [];
+  for (const p of listProviders()) {
+    if (p.enabled === false) continue;
+    for (const m of (Array.isArray(p.models) ? p.models : [])) {
+      provModels.push({ id: `${p.name}/${m}`, type: 'text', available: true, source: 'provider', provider: p.name, latency: null, reason: null });
+    }
+  }
+  status.models = [...status.models, ...provModels];
+  res.json(status);
 });
 
 app.post('/api/models/refresh', async (req, res) => {

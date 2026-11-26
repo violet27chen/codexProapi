@@ -281,7 +281,7 @@ print(result.data[0].url)`;
                 if (this.page === 'logs' || this.page === 'dashboard') this.loadLogs();
             }, 10000);
             setInterval(() => {
-                if (this.page === 'models' && !this.loading.models) this.doRefreshModels(false);
+                if (this.page === 'models' && !this.loading.models) this.loadModels();
             }, 60000);
             setInterval(() => this.checkHealth(), 30000);
             setInterval(() => {

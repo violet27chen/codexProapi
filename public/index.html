@@ -41,7 +41,7 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
           账号管理
           <span x-show="accounts.length>0" class="badge badge-info ml-auto" x-text="accounts.length"></span>
         </div>
-        <div class="nav-item" :class="page==='models'&&'active'" @click="page='models'; doRefreshModels(false)">
+        <div class="nav-item" :class="page==='models'&&'active'" @click="page='models'; loadModels()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
           模型可用性
           <span x-show="models.length>0" class="badge badge-ok ml-auto" x-text="availableModelsCount+'/'+models.length"></span>
