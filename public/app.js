@@ -28,7 +28,7 @@ function app() {
         batchImportResults: null,
         imageCopied: false,
         lf: 'all',
-        loading: { usage: false, logs: false, models: false, health: false, addAcc: false, localCodexLogin: false, settings: false, refreshTokens: false, batchImport: false, exportAccounts: false, importAccountsFile: false },
+        loading: { usage: false, logs: false, models: false, health: false, addAcc: false, localCodexLogin: false, settings: false, refreshTokens: false, batchImport: false, exportAccounts: false, importAccountsFile: false, saveProvider: false },
         toast: null,
         _tt: null,
         // admin auth
@@ -39,6 +39,9 @@ function app() {
         adminErr: '',
         adminSubmitting: false,
         deviceLogin: { status: 'none', message: '', user_code: '', verification_uri: '' },
+        providers: [],
+        showProvider: false,
+        pf: { index: null, name: '', type: 'openai', base_url: '', api_key: '', models: '' },
         endpoints: [
             { m: 'POST', path: '/v1/chat/completions', desc: '对话补全' },
             { m: 'POST', path: '/v1/responses', desc: 'OpenAI Responses API' },
@@ -480,6 +483,57 @@ print(result.data[0].url)`;
                     this.toast2('Codex 设备登录失败：' + (d.message || '未知'), 'error');
                 }
             } catch (_) {}
+        },
+        async loadProviders() {
+            try { const d = await (await fetch('/api/providers')).json(); this.providers = (d.providers || []).map((p, i) => ({ ...p, index: i })); } catch (_) {}
+        },
+        openProviderForm() {
+            this.pf = { index: null, name: '', type: 'openai', base_url: '', api_key: '', models: '' };
+            this.showProvider = true;
+        },
+        editProvider(p) {
+            this.pf = { index: p.index, name: p.name, type: p.type, base_url: p.base_url, api_key: '', models: (p.models || []).join(', ') };
+            this.showProvider = true;
+        },
+        async saveProvider() {
+            this.loading.saveProvider = true;
+            try {
+                const body = {
+                    name: this.pf.name, type: this.pf.type, base_url: this.pf.base_url, api_key: this.pf.api_key,
+                    models: String(this.pf.models || '').split(/[,\n]+/).map((s) => s.trim()).filter(Boolean),
+                };
+                const isNew = this.pf.index == null;
+                const url = isNew ? '/api/providers' : ('/api/providers/' + this.pf.index);
+                const r = await fetch(url, { method: isNew ? 'POST' : 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+                const d = await r.json();
+                if (!r.ok || d.error) { this.toast2('保存失败：' + (d.error || r.status), 'error'); return; }
+                this.toast2(isNew ? '已添加提供商' : '已更新提供商', 'success');
+                this.showProvider = false;
+                await this.loadProviders();
+            } catch (e) { this.toast2('保存失败：' + e.message, 'error'); } finally { this.loading.saveProvider = false; }
+        },
+        async delProvider(index) {
+            if (!confirm('删除该提供商？')) return;
+            try {
+                const d = await (await fetch('/api/providers/' + index, { method: 'DELETE' })).json();
+                if (d.error) { this.toast2('删除失败：' + d.error, 'error'); return; }
+                this.toast2('已删除', 'success'); await this.loadProviders();
+            } catch (e) { this.toast2('删除失败：' + e.message, 'error'); }
+        },
+        async toggleProvider(p) {
+            try {
+                await fetch('/api/providers/' + p.index + '/enabled', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: !p.enabled }) });
+                await this.loadProviders();
+            } catch (e) { this.toast2('操作失败：' + e.message, 'error'); }
+        },
+        async testProvider(index) {
+            this.loading['providerTest' + index] = true;
+            try {
+                const d = await (await fetch('/api/providers/' + index + '/test', { method: 'POST' })).json();
+                const prov = this.providers.find((p) => p.index === index);
+                if (prov) prov._test = d;
+                this.toast2(d.ok ? ('连通成功：' + (d.sample || '')) : ('失败：' + (d.error || d.sample || d.status)), d.ok ? 'success' : 'error');
+            } catch (e) { this.toast2('测试失败：' + e.message, 'error'); } finally { this.loading['providerTest' + index] = false; }
         },
         editAccount(acc) {
             this.accountEditIndex = acc.index;

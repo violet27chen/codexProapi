@@ -39,7 +39,7 @@ const FLUSH_MS = Math.max(200, Number(process.env.CODEX_PERSIST_FLUSH_MS) || 120
 export const enabled = Boolean(SUPABASE_URL && SUPABASE_KEY);
 
 // 需要持久化的状态文件名（同时也是云端主键 key）
-const PERSISTED = ['accounts.json', 'config.json', 'usage.json', 'image_usage.json', 'image_exhausted.json'];
+const PERSISTED = ['accounts.json', 'config.json', 'providers.json', 'usage.json', 'image_usage.json', 'image_exhausted.json'];
 
 // key -> 本地绝对路径（hydrate 写回时使用）
 function targetPathFor(key) {
@@ -47,7 +47,8 @@ function targetPathFor(key) {
     case 'accounts.json':
       return accountsPath();
     case 'config.json':
-      return join(dirname(accountsPath()), 'config.json');
+    case 'providers.json':
+      return join(dirname(accountsPath()), key);
     default:
       return join(DATA_DIR, key);
   }

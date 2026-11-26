@@ -46,6 +46,11 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
           模型可用性
           <span x-show="models.length>0" class="badge badge-ok ml-auto" x-text="availableModelsCount+'/'+models.length"></span>
         </div>
+        <div class="nav-item" :class="page==='providers'&&'active'" @click="page='providers'; loadProviders()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+          提供商
+          <span x-show="providers.length>0" class="badge badge-info ml-auto" x-text="providers.length"></span>
+        </div>
         <div class="nav-item" :class="page==='usage'&&'active'" @click="page='usage'; loadUsage()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
           用量统计
@@ -75,7 +80,7 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
 
       <!-- Page header -->
       <div class="page-header">
-        <span class="page-title" x-text="{dashboard:'仪表盘',accounts:'账号管理',models:'模型可用性',usage:'用量统计',logs:'请求日志',settings:'系统设置'}[page]"></span>
+        <span class="page-title" x-text="{dashboard:'仪表盘',accounts:'账号管理',models:'模型可用性',providers:'提供商',usage:'用量统计',logs:'请求日志',settings:'系统设置'}[page]"></span>
         <div class="header-actions">
           <!-- accounts actions -->
           <div class="flex gap-2" x-show="page==='accounts'">
@@ -99,6 +104,10 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
               <svg x-show="loading.models" class="spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.22-8.56"/></svg>
               刷新探测
             </button>
+          </div>
+          <!-- providers actions -->
+          <div x-show="page==='providers'">
+            <button type="button" class="btn btn-primary" @click="openProviderForm()">+ 添加提供商</button>
           </div>
           <!-- logs actions -->
           <div x-show="page==='logs'">
@@ -319,6 +328,43 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
                     <td class="text-muted" x-text="m.availableAccountCount != null ? m.availableAccountCount + ' / ' + m.accountCount : '—'"></td>
                     <td class="text-muted" x-text="m.latency!=null ? m.latency+'ms' : '—'"></td>
                     <td class="text-muted text-xs" x-text="modelReasonLabel(m.reason, m)"></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ════ PROVIDERS ════ -->
+      <div class="content" x-show="page==='providers'" x-cloak>
+        <div class="card mb-3">
+          <div class="card-title">聚合多个上游 API Key</div>
+          <p class="text-muted text-sm">把其它提供商（OpenAI 兼容 / Anthropic / Google）聚合到同一个入口，客户端只需切换模型、不必换 Base URL/Key。用法：模型名写成 <span class="mono">提供商名/模型id</span>（如 <span class="mono">deepseek/deepseek-chat</span>）。<b>不带前缀</b>的模型仍走内置 Codex 账号。</p>
+        </div>
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>名称(前缀)</th><th>类型</th><th>Base URL</th><th>Key</th><th>模型</th><th>状态</th><th>操作</th></tr></thead>
+              <tbody>
+                <tr x-show="providers.length===0"><td colspan="7" class="empty">还没有提供商，点右上角“+ 添加提供商”</td></tr>
+                <template x-for="(p, idx) in providers" :key="p.id">
+                  <tr>
+                    <td class="mono" x-text="p.name"></td>
+                    <td><span class="badge badge-info" x-text="p.type"></span></td>
+                    <td class="mono text-xs" x-text="p.base_url"></td>
+                    <td class="mono text-xs" x-text="p.keyMask"></td>
+                    <td class="text-muted text-xs" x-text="p.models.length ? p.models.join(', ') : '（未声明，用 名称/模型id 直接调）'"></td>
+                    <td>
+                      <span class="badge" :class="p.enabled?'badge-ok':'badge-err'" x-text="p.enabled?'启用':'停用'"></span>
+                      <span x-show="p._test" class="text-xs" :class="p._test.ok?'text-ok':'text-err'" x-text="p._test.ok?('✔ '+p._test.sample):('✖ '+(p._test.error||p._test.sample||'失败'))"></span>
+                    </td>
+                    <td>
+                      <button type="button" class="btn btn-sm" @click="testProvider(p.index)" :class="{'btn-loading':loading['providerTest'+p.index]}">测试</button>
+                      <button type="button" class="btn btn-sm" @click="toggleProvider(p)" x-text="p.enabled?'停用':'启用'"></button>
+                      <button type="button" class="btn btn-sm" @click="editProvider(p)">修改</button>
+                      <button type="button" class="btn btn-sm btn-danger" @click="delProvider(p.index)">删除</button>
+                    </td>
                   </tr>
                 </template>
               </tbody>
@@ -615,6 +661,47 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
       <svg x-show="adminSubmitting" class="spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.22-8.56"/></svg>
       登录
     </button>
+  </div>
+</div>
+
+<!-- Provider add/edit modal -->
+<div class="overlay" x-show="showProvider" x-cloak @keydown.escape.window="showProvider=false">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-head">
+      <div class="modal-title" x-text="pf.index==null ? '添加提供商' : '修改提供商'"></div>
+      <button type="button" class="modal-close" @click="showProvider=false">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <label class="form-label">名称（模型前缀，小写）</label>
+        <input type="text" x-model="pf.name" placeholder="如：deepseek / openrouter / claude">
+      </div>
+      <div class="form-row">
+        <label class="form-label">类型</label>
+        <select x-model="pf.type">
+          <option value="openai">OpenAI 兼容</option>
+          <option value="anthropic">Anthropic</option>
+          <option value="google">Google Gemini</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label class="form-label">Base URL</label>
+        <input type="text" class="mono" x-model="pf.base_url" placeholder="如：https://api.deepseek.com/v1">
+      </div>
+      <div class="form-row">
+        <label class="form-label" x-text="pf.index==null ? 'API Key' : 'API Key（留空保持原值）'"></label>
+        <input type="text" class="mono" x-model="pf.api_key" placeholder="sk-... / 或对应提供商的 key">
+      </div>
+      <div class="form-row">
+        <label class="form-label">模型列表（逗号或换行分隔，可留空）</label>
+        <textarea x-model="pf.models" rows="3" placeholder="deepseek-chat, deepseek-reasoner"></textarea>
+      </div>
+      <div class="text-muted text-xs">调用时模型写 <span class="mono" x-text="pf.name?('名称/模型'):'提供商名/模型id'"></span>，例如 <span class="mono" x-text="pf.name?(pf.name+'/xxx'):'deepseek/deepseek-chat'"></span></div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn" @click="showProvider=false">取消</button>
+      <button type="button" class="btn btn-primary" @click="saveProvider()" :class="{'btn-loading':loading.saveProvider}">保存</button>
+    </div>
   </div>
 </div>
 

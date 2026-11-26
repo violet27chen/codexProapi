@@ -26,6 +26,11 @@ import {
   exportAccounts,
 } from './accounts.js';
 import { hydrateFromCloud, queuePush, initPersistTimers } from './persist.js';
+import {
+  listProvidersForApi, addProvider, updateProvider, deleteProvider,
+  setProviderEnabled, resolveRouting, listProviderModelIds, listProviders,
+} from './providers.js';
+import { forwardChatCompletion } from './providerProxy.js';
 import { getAuthorizeUrl, exchangeCodeForToken, startDeviceAuth, pollDeviceAuthOnce } from './oauth.js';
 import { getLocalCodexLoginStatus, startLocalCodexLogin } from './localCodexLogin.js';
 import { isAccountUnavailable, isImageQuotaExhausted } from './accountStatus.js';
@@ -450,11 +455,18 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'codex-proapi' });
 });
 
+// 若 model 带“提供商名/”前缀，转发到对应提供商；命中返回 true（已处理），否则 false（走内置 Codex）
+async function tryRouteToProvider(body, res) {
+  const route = resolveRouting(body.model);
+  if (!route) return false;
+  await forwardChatCompletion(route.provider, { ...body, model: route.model }, res);
+  return true;
+}
+
 app.get('/v1/models', (req, res) => {
-  res.json({
-    object: 'list',
-    data: getAvailableModelsOpenAI(),
-  });
+  const codex = getAvailableModelsOpenAI();
+  const extra = listProviderModelIds().map((m) => ({ id: m.id, object: 'model', created: 1687882411, owned_by: m.owned_by }));
+  res.json({ object: 'list', data: [...codex, ...extra] });
 });
 
 app.get('/api/models', (req, res) => {
@@ -479,9 +491,48 @@ app.get('/api/accounts/health', async (req, res) => {
   }
 });
 
+// ── 提供商（多上游聚合）──
+app.get('/api/providers', (req, res) => { res.json({ providers: listProvidersForApi() }); });
+app.post('/api/providers', (req, res) => {
+  try { res.json(addProvider(req.body || {})); } catch (e) { res.status(400).json({ error: e.message }); }
+});
+app.put('/api/providers/:index', (req, res) => {
+  try { res.json(updateProvider(req.params.index, req.body || {})); } catch (e) { res.status(400).json({ error: e.message }); }
+});
+app.delete('/api/providers/:index', (req, res) => {
+  try { res.json(deleteProvider(req.params.index)); } catch (e) { res.status(400).json({ error: e.message }); }
+});
+app.post('/api/providers/:index/enabled', (req, res) => {
+  try { res.json(setProviderEnabled(req.params.index, !!(req.body && req.body.enabled))); } catch (e) { res.status(400).json({ error: e.message }); }
+});
+// 测试提供商连通性：向第一个已声明模型发一条最小请求
+app.post('/api/providers/:index/test', async (req, res) => {
+  const p = listProviders()[Number(req.params.index)];
+  if (!p) return res.status(404).json({ error: '未找到提供商' });
+  const model = (Array.isArray(p.models) && p.models[0]) || 'test';
+  const cap = {
+    statusCode: 200, body: null, headersSent: false,
+    setHeader() {}, write() {}, end() {},
+    json(o) { this.body = o; },
+    status(c) { this.statusCode = c; return this; },
+  };
+  try {
+    await forwardChatCompletion(p, { model, messages: [{ role: 'user', content: 'ping' }], stream: false, max_tokens: 8 }, cap);
+    const ok = cap.statusCode >= 200 && cap.statusCode < 300 && cap.body && Array.isArray(cap.body.choices);
+    res.json({
+      ok,
+      status: cap.statusCode,
+      sample: ok ? String(cap.body.choices[0]?.message?.content || '').slice(0, 80) : (cap.body?.error?.message || '无内容'),
+    });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
 app.post('/v1/chat/completions', async (req, res) => {
   const body = withDefaultModel(req.body);
   if (!body.model) return res.status(503).json({ error: '暂无可用模型，请先添加账号并刷新模型目录' });
+  if (await tryRouteToProvider(body, res)) return;
   const { accounts } = listAccountsForApi();
   const accountCount = loadAccountsForProxy().length || 1;
   const usedAuth = await handleChatCompletions(body, res, getAuthProvider, accountCount);
@@ -503,6 +554,7 @@ app.post('/v1/responses', async (req, res) => {
   }
   body = withDefaultModel(body);
   if (!body.model) return res.status(503).json({ error: '暂无可用模型，请先添加账号并刷新模型目录' });
+  if (await tryRouteToProvider(body, res)) return;
   if (body.messages.length === 0) {
     return res.status(400).json({
       error: { message: 'Responses API 的 input 不能为空', type: 'invalid_request_error', code: 'invalid_input' },
@@ -521,6 +573,7 @@ app.post('/v1/responses', async (req, res) => {
 app.post('/chat/completions', async (req, res) => {
   const body = withDefaultModel(req.body);
   if (!body.model) return res.status(503).json({ error: '暂无可用模型，请先添加账号并刷新模型目录' });
+  if (await tryRouteToProvider(body, res)) return;
   const { accounts } = listAccountsForApi();
   const accountCount = loadAccountsForProxy().length || 1;
   const usedAuth = await handleChatCompletions(body, res, getAuthProvider, accountCount);
@@ -535,6 +588,7 @@ app.post('/chat/completions', async (req, res) => {
 app.post('/v1/messages', async (req, res) => {
   const body = withDefaultModel(normalizeClaudeMessagesRequest(req.body));
   if (!body.model) return res.status(503).json({ error: '暂无可用模型，请先添加账号并刷新模型目录' });
+  if (await tryRouteToProvider(body, res)) return;
   if (!Array.isArray(body.messages) || body.messages.length === 0) {
     return res.status(400).json({ error: 'messages 不能为空' });
   }
@@ -552,6 +606,7 @@ app.post('/v1/messages', async (req, res) => {
 app.post('/responses', async (req, res) => {
   const body = withDefaultModel(req.body);
   if (!body.model) return res.status(503).json({ error: '暂无可用模型，请先添加账号并刷新模型目录' });
+  if (await tryRouteToProvider(body, res)) return;
   const { accounts } = listAccountsForApi();
   const accountCount = loadAccountsForProxy().length || 1;
   const usedAuth = await handleChatCompletions(body, res, getAuthProvider, accountCount);
