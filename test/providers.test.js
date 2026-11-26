@@ -43,7 +43,20 @@ test('providers: 重名/非法名/非法 base_url 被拒', async () => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-test('providers: 前缀路由解析（最长匹配，兼容 org/model）', async () => {
+test('providers: 别名映射 显示名=真实id（两段调用，转发成真实 id）', async () => {
+  const { m, dir } = await freshProviders();
+  m.addProvider({ name: 'cantrustai', type: 'openai', base_url: 'https://api.cantrustai.xyz/v1', api_key: 'k', models: ['deepseek-v4.1-flash=deepseek/deepseek-v4.1-flash'] });
+  // 客户端只写两段 -> 路由解析出真实上游 id（三段）
+  const r = m.resolveRouting('cantrustai/deepseek-v4.1-flash');
+  assert.equal(r.provider.name, 'cantrustai');
+  assert.equal(r.model, 'deepseek/deepseek-v4.1-flash');
+  // 展示/聚合列表用显示名（两段），不暴露真实 id
+  const ids = m.listProviderModelIds().map((x) => x.id);
+  assert.deepEqual(ids, ['cantrustai/deepseek-v4.1-flash']);
+  // 未声明别名 -> 原样透传
+  assert.equal(m.resolveRouting('cantrustai/some-other').model, 'some-other');
+  rmSync(dir, { recursive: true, force: true });
+});
   const { m, dir } = await freshProviders();
   m.addProvider({ name: 'open', type: 'openai', base_url: 'https://a.com/v1', api_key: 'k' });
   m.addProvider({ name: 'openrouter', type: 'openai', base_url: 'https://openrouter.ai/api/v1', api_key: 'k' });

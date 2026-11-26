@@ -704,7 +704,7 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
         <textarea x-model="pf.models" rows="3"></textarea>
         <button type="button" class="btn btn-sm mt-2" @click="fetchProviderModelsLive()" :class="{'btn-loading':loading.fetchModels}">获取模型列表</button>
       </div>
-      <div class="text-muted text-xs">调用时模型写 <span class="mono">提供商名/模型id</span>，例如 <span class="mono" x-text="pf.name?(pf.name+'/xxx'):'deepseek/deepseek-chat'"></span></div>
+      <div class="text-muted text-xs">调用时模型写 <span class="mono">提供商名/模型id</span>（两段）。若上游真实 id 本身带斜杠（如 <span class="mono">deepseek/deepseek-v4.1-flash</span>），在此用 <span class="mono">显示名=真实id</span> 声明，调用时只写 <span class="mono" x-text="pf.name?(pf.name+'/显示名'):'提供商名/显示名'"></span> 即可。</div>
     </div>
     <div class="modal-foot">
       <button type="button" class="btn" @click="showProvider=false">取消</button>

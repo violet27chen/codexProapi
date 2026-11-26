@@ -472,14 +472,10 @@ app.get('/v1/models', (req, res) => {
 
 app.get('/api/models', (req, res) => {
   const status = getModelsStatus();
-  // 并入启用提供商已声明的模型（即时、不参与 Codex 探测）
-  const provModels = [];
-  for (const p of listProviders()) {
-    if (p.enabled === false) continue;
-    for (const m of (Array.isArray(p.models) ? p.models : [])) {
-      provModels.push({ id: `${p.name}/${m}`, type: 'text', available: true, source: 'provider', provider: p.name, latency: null, reason: null });
-    }
-  }
+  // 并入启用提供商的模型（显示名，两段；不参与 Codex 探测）
+  const provModels = listProviderModelIds().map((m) => ({
+    id: m.id, type: 'text', available: true, source: 'provider', provider: m.id.split('/')[0], latency: null, reason: null,
+  }));
   status.models = [...status.models, ...provModels];
   res.json(status);
 });

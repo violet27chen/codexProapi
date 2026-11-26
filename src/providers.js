@@ -158,29 +158,41 @@ export function setProviderEnabled(index, enabled) {
 
 /**
  * 路由解析：model 若以 `<提供商名>/` 开头（取最长匹配，兼容 org/model 型 id），
- * 返回 { provider, model }（model 已去掉前缀）；否则返回 null（走内置 Codex）。
+ * 返回 { provider, model }（model 已去掉前缀，并按别名映射成上游真实 id）；否则 null（走内置 Codex）。
+ * 模型条目支持 `显示名=真实id`：客户端只写 `提供商名/显示名`（两段），网关转发时替换为真实 id。
  */
+function parseModelEntry(entry) {
+  const s = String(entry || '').trim();
+  const eq = s.indexOf('=');
+  if (eq > 0) return { display: s.slice(0, eq).trim(), upstream: s.slice(eq + 1).trim() };
+  return { display: s, upstream: s };
+}
+
 export function resolveRouting(model) {
   if (typeof model !== 'string' || !model.includes('/')) return null;
   const enabled = loadRaw().filter((p) => p.enabled !== false);
   let best = null;
   for (const p of enabled) {
-    const prefix = `${p.name}/`;
-    if (model.startsWith(prefix)) {
-      if (!best || p.name.length > best.name.length) best = p;
-    }
+    if (model.startsWith(`${p.name}/`) && (!best || p.name.length > best.name.length)) best = p;
   }
   if (!best) return null;
-  return { provider: best, model: model.slice(best.name.length + 1) };
+  const after = model.slice(best.name.length + 1);
+  let upstream = after;
+  for (const entry of (Array.isArray(best.models) ? best.models : [])) {
+    const { display, upstream: real } = parseModelEntry(entry);
+    if (display && display === after) { upstream = real; break; }
+  }
+  return { provider: best, model: upstream };
 }
 
-/** 供 /v1/models 聚合：把每个启用提供商的模型加前缀列出 */
+/** 供 /v1/models 聚合：把每个启用提供商的模型按“显示名”列出（不含真实 id） */
 export function listProviderModelIds() {
   const out = [];
   for (const p of loadRaw()) {
     if (p.enabled === false) continue;
-    for (const m of (Array.isArray(p.models) ? p.models : [])) {
-      out.push({ id: `${p.name}/${m}`, owned_by: p.type });
+    for (const entry of (Array.isArray(p.models) ? p.models : [])) {
+      const { display } = parseModelEntry(entry);
+      if (display) out.push({ id: `${p.name}/${display}`, owned_by: p.type });
     }
   }
   return out;
