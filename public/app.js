@@ -28,7 +28,7 @@ function app() {
         batchImportResults: null,
         imageCopied: false,
         lf: 'all',
-        loading: { usage: false, logs: false, models: false, health: false, addAcc: false, localCodexLogin: false, settings: false, refreshTokens: false, batchImport: false, exportAccounts: false, importAccountsFile: false, saveProvider: false },
+        loading: { usage: false, logs: false, models: false, health: false, addAcc: false, localCodexLogin: false, settings: false, refreshTokens: false, batchImport: false, exportAccounts: false, importAccountsFile: false, saveProvider: false, fetchModels: false },
         toast: null,
         _tt: null,
         // admin auth
@@ -40,8 +40,9 @@ function app() {
         adminSubmitting: false,
         deviceLogin: { status: 'none', message: '', user_code: '', verification_uri: '' },
         providers: [],
+        providerPresets: [],
         showProvider: false,
-        pf: { index: null, name: '', type: 'openai', base_url: '', api_key: '', models: '' },
+        pf: { index: null, preset: '', name: '', type: 'openai', base_url: '', api_key: '', models: '' },
         endpoints: [
             { m: 'POST', path: '/v1/chat/completions', desc: '对话补全' },
             { m: 'POST', path: '/v1/responses', desc: 'OpenAI Responses API' },
@@ -486,14 +487,37 @@ print(result.data[0].url)`;
         },
         async loadProviders() {
             try { const d = await (await fetch('/api/providers')).json(); this.providers = (d.providers || []).map((p, i) => ({ ...p, index: i })); } catch (_) {}
+            if (!this.providerPresets.length) {
+                try { const pd = await (await fetch('/api/providers/presets')).json(); this.providerPresets = pd.presets || []; } catch (_) {}
+            }
         },
         openProviderForm() {
-            this.pf = { index: null, name: '', type: 'openai', base_url: '', api_key: '', models: '' };
+            this.pf = { index: null, preset: '', name: '', type: 'openai', base_url: '', api_key: '', models: '' };
             this.showProvider = true;
         },
         editProvider(p) {
-            this.pf = { index: p.index, name: p.name, type: p.type, base_url: p.base_url, api_key: '', models: (p.models || []).join(', ') };
+            this.pf = { index: p.index, preset: '', name: p.name, type: p.type, base_url: p.base_url, api_key: '', models: (p.models || []).join(', ') };
             this.showProvider = true;
+        },
+        applyProviderPreset() {
+            const ps = this.providerPresets.find((x) => x.key === this.pf.preset);
+            if (!ps) return;
+            this.pf.type = ps.type;
+            this.pf.base_url = ps.base_url;
+            if (this.pf.index == null && !this.pf.name) this.pf.name = ps.key;
+        },
+        async fetchProviderModelsLive() {
+            if (!this.pf.base_url) { this.toast2('请先填 Base URL', 'error'); return; }
+            this.loading.fetchModels = true;
+            try {
+                const d = await (await fetch('/api/providers/fetch-models', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type: this.pf.type, base_url: this.pf.base_url, api_key: this.pf.api_key }),
+                })).json();
+                if (!d.ok) { this.toast2('获取失败：' + (d.error || ''), 'error'); return; }
+                this.pf.models = (d.models || []).join(', ');
+                this.toast2('已获取 ' + (d.models || []).length + ' 个模型', 'success');
+            } catch (e) { this.toast2('获取失败：' + e.message, 'error'); } finally { this.loading.fetchModels = false; }
         },
         async saveProvider() {
             this.loading.saveProvider = true;

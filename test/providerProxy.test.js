@@ -2,8 +2,36 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   openaiToAnthropic, anthropicToOpenai,
-  openaiToGoogle, googleToOpenai,
+  openaiToGoogle, googleToOpenai, fetchProviderModels,
 } from '../src/providerProxy.js';
+
+test('fetchProviderModels: openai /models', async () => {
+  const real = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => {
+    assert.match(String(url), /\/v1\/models$/);
+    assert.equal(opts.headers.Authorization, 'Bearer k');
+    return { ok: true, status: 200, async text() { return JSON.stringify({ data: [{ id: 'a' }, { id: 'b' }] }); } };
+  };
+  try { assert.deepEqual(await fetchProviderModels({ type: 'openai', base_url: 'https://x.com/v1', api_key: 'k' }), ['a', 'b']); }
+  finally { globalThis.fetch = real; }
+});
+
+test('fetchProviderModels: google 去 models/ 前缀', async () => {
+  const real = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    assert.match(String(url), /\/v1beta\/models$/);
+    return { ok: true, status: 200, async text() { return JSON.stringify({ models: [{ name: 'models/gemini-2.0-flash' }] }); } };
+  };
+  try { assert.deepEqual(await fetchProviderModels({ type: 'google', base_url: 'https://generativelanguage.googleapis.com', api_key: 'k' }), ['gemini-2.0-flash']); }
+  finally { globalThis.fetch = real; }
+});
+
+test('fetchProviderModels: 非 2xx 抛错', async () => {
+  const real = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: false, status: 401, async text() { return 'unauthorized'; } });
+  try { await assert.rejects(() => fetchProviderModels({ type: 'openai', base_url: 'https://x.com/v1', api_key: 'k' }), /401/); }
+  finally { globalThis.fetch = real; }
+});
 
 test('openaiToAnthropic: system 抽出、role 映射、max_tokens 默认', () => {
   const out = openaiToAnthropic({

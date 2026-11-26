@@ -20,6 +20,25 @@ const DATA_DIR = process.env.CODEX_DATA_DIR || join(__dirname, '..', 'data');
 
 const TYPES = new Set(['openai', 'anthropic', 'google']);
 
+// 内置提供商预设（端点为各家公开的 OpenAI/Anthropic/Gemini 兼容地址，可编辑覆盖）
+const PRESETS = [
+  { key: 'openai', label: 'OpenAI', type: 'openai', base_url: 'https://api.openai.com/v1' },
+  { key: 'deepseek', label: 'DeepSeek', type: 'openai', base_url: 'https://api.deepseek.com/v1' },
+  { key: 'moonshot', label: 'Moonshot Kimi', type: 'openai', base_url: 'https://api.moonshot.cn/v1' },
+  { key: 'zhipu', label: '智谱 GLM', type: 'openai', base_url: 'https://open.bigmodel.cn/api/paas/v4' },
+  { key: 'dashscope', label: '阿里云百炼 DashScope', type: 'openai', base_url: 'https://dashscope.aliyuncs.com/compatible-mode/v1' },
+  { key: 'siliconflow', label: '硅基流动 SiliconFlow', type: 'openai', base_url: 'https://api.siliconflow.cn/v1' },
+  { key: 'openrouter', label: 'OpenRouter', type: 'openai', base_url: 'https://openrouter.ai/api/v1' },
+  { key: 'groq', label: 'Groq', type: 'openai', base_url: 'https://api.groq.com/openai/v1' },
+  { key: 'mistral', label: 'Mistral', type: 'openai', base_url: 'https://api.mistral.ai/v1' },
+  { key: 'xai', label: 'xAI Grok', type: 'openai', base_url: 'https://api.x.ai/v1' },
+  { key: 'together', label: 'Together AI', type: 'openai', base_url: 'https://api.together.xyz/v1' },
+  { key: 'anthropic', label: 'Anthropic Claude', type: 'anthropic', base_url: 'https://api.anthropic.com' },
+  { key: 'gemini', label: 'Google Gemini', type: 'google', base_url: 'https://generativelanguage.googleapis.com' },
+];
+
+export function listProviderPresets() { return PRESETS; }
+
 function accountsPath() {
   return process.env.CODEX_ACCOUNTS_FILE || join(DATA_DIR, 'accounts.json');
 }

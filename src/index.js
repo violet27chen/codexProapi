@@ -29,8 +29,9 @@ import { hydrateFromCloud, queuePush, initPersistTimers } from './persist.js';
 import {
   listProvidersForApi, addProvider, updateProvider, deleteProvider,
   setProviderEnabled, resolveRouting, listProviderModelIds, listProviders,
+  listProviderPresets,
 } from './providers.js';
-import { forwardChatCompletion } from './providerProxy.js';
+import { forwardChatCompletion, fetchProviderModels } from './providerProxy.js';
 import { getAuthorizeUrl, exchangeCodeForToken, startDeviceAuth, pollDeviceAuthOnce } from './oauth.js';
 import { getLocalCodexLoginStatus, startLocalCodexLogin } from './localCodexLogin.js';
 import { isAccountUnavailable, isImageQuotaExhausted } from './accountStatus.js';
@@ -504,6 +505,17 @@ app.delete('/api/providers/:index', (req, res) => {
 });
 app.post('/api/providers/:index/enabled', (req, res) => {
   try { res.json(setProviderEnabled(req.params.index, !!(req.body && req.body.enabled))); } catch (e) { res.status(400).json({ error: e.message }); }
+});
+// 提供商预设（内置正确端点，供前端下拉填充）
+app.get('/api/providers/presets', (req, res) => { res.json({ presets: listProviderPresets() }); });
+// 一键获取上游模型列表（未保存也能测；body: {type, base_url, api_key}）
+app.post('/api/providers/fetch-models', async (req, res) => {
+  try {
+    const models = await fetchProviderModels(req.body || {});
+    res.json({ ok: true, models });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
 });
 // 测试提供商连通性：向第一个已声明模型发一条最小请求
 app.post('/api/providers/:index/test', async (req, res) => {

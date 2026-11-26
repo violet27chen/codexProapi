@@ -673,8 +673,15 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
     </div>
     <div class="modal-body">
       <div class="form-row">
+        <label class="form-label">预设（可选，自动填端点）</label>
+        <select x-model="pf.preset" @change="applyProviderPreset()">
+          <option value="">自定义…</option>
+          <template x-for="ps in providerPresets" :key="ps.key"><option :value="ps.key" x-text="ps.label"></option></template>
+        </select>
+      </div>
+      <div class="form-row">
         <label class="form-label">名称（模型前缀，小写）</label>
-        <input type="text" x-model="pf.name" placeholder="如：deepseek / openrouter / claude">
+        <input type="text" x-model="pf.name">
       </div>
       <div class="form-row">
         <label class="form-label">类型</label>
@@ -686,17 +693,18 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
       </div>
       <div class="form-row">
         <label class="form-label">Base URL</label>
-        <input type="text" class="mono" x-model="pf.base_url" placeholder="如：https://api.deepseek.com/v1">
+        <input type="text" class="mono" x-model="pf.base_url">
       </div>
       <div class="form-row">
         <label class="form-label" x-text="pf.index==null ? 'API Key' : 'API Key（留空保持原值）'"></label>
-        <input type="text" class="mono" x-model="pf.api_key" placeholder="sk-... / 或对应提供商的 key">
+        <input type="text" class="mono" x-model="pf.api_key">
       </div>
       <div class="form-row">
         <label class="form-label">模型列表（逗号或换行分隔，可留空）</label>
-        <textarea x-model="pf.models" rows="3" placeholder="deepseek-chat, deepseek-reasoner"></textarea>
+        <textarea x-model="pf.models" rows="3"></textarea>
+        <button type="button" class="btn btn-sm mt-2" @click="fetchProviderModelsLive()" :class="{'btn-loading':loading.fetchModels}">获取模型列表</button>
       </div>
-      <div class="text-muted text-xs">调用时模型写 <span class="mono" x-text="pf.name?('名称/模型'):'提供商名/模型id'"></span>，例如 <span class="mono" x-text="pf.name?(pf.name+'/xxx'):'deepseek/deepseek-chat'"></span></div>
+      <div class="text-muted text-xs">调用时模型写 <span class="mono">提供商名/模型id</span>，例如 <span class="mono" x-text="pf.name?(pf.name+'/xxx'):'deepseek/deepseek-chat'"></span></div>
     </div>
     <div class="modal-foot">
       <button type="button" class="btn" @click="showProvider=false">取消</button>

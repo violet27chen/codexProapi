@@ -280,3 +280,31 @@ export async function forwardChatCompletion(provider, body, res) {
     return proxyError(res, 502, `转发失败：${e.message}`);
   }
 }
+
+/**
+ * 一键获取上游真实模型列表（可用于新增/编辑时，未保存也能测）。返回模型 id 字符串数组。
+ */
+export async function fetchProviderModels({ type, base_url, api_key } = {}) {
+  if (!base_url) throw new Error('base_url 不能为空');
+  const b = String(base_url).replace(/\/+$/, '');
+  let url, headers, parse;
+  if (type === 'anthropic') {
+    url = `${b.replace(/\/v1$/i, '')}/v1/models`;
+    headers = { 'x-api-key': api_key || '', 'anthropic-version': ANTHROPIC_VERSION };
+    parse = (j) => (j.data || []).map((m) => m.id).filter(Boolean);
+  } else if (type === 'google') {
+    url = `${b.replace(/\/v1beta$/i, '')}/v1beta/models`;
+    headers = { 'x-goog-api-key': api_key || '' };
+    parse = (j) => (j.models || []).map((m) => String(m.name || '').replace(/^models\//, '')).filter(Boolean);
+  } else {
+    url = /\/v1$/i.test(b) ? `${b}/models` : `${b}/v1/models`;
+    headers = { Authorization: `Bearer ${api_key || ''}` };
+    parse = (j) => (j.data || []).map((m) => m.id).filter(Boolean);
+  }
+  const res = await fetch(url, { headers });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${text.slice(0, 200)}`);
+  let json;
+  try { json = text ? JSON.parse(text) : {}; } catch { throw new Error('上游返回非 JSON'); }
+  return parse(json);
+}
