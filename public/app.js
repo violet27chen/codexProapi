@@ -514,7 +514,13 @@ print(result.data[0].url)`;
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ type: this.pf.type, base_url: this.pf.base_url, api_key: this.pf.api_key }),
                 })).json();
-                if (!d.ok) { this.toast2('获取失败：' + (d.error || ''), 'error'); return; }
+                if (!d.ok) {
+                    const notFound = /404|not found/i.test(d.error || '');
+                    this.toast2(notFound
+                        ? '该上游未提供模型列表，可手动填写模型，或留空直接用 名称/模型id 调用'
+                        : ('获取失败：' + (d.error || '')), notFound ? 'info' : 'error');
+                    return;
+                }
                 this.pf.models = (d.models || []).join(', ');
                 this.toast2('已获取 ' + (d.models || []).length + ' 个模型', 'success');
             } catch (e) { this.toast2('获取失败：' + e.message, 'error'); } finally { this.loading.fetchModels = false; }
