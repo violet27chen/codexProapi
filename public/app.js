@@ -5,6 +5,9 @@ function app() {
     return {
         /* ── state ── */
         page: 'dashboard',
+        menuOpen: false,
+        exampleApi: 'chat',
+        exampleLang: 'curl',
         version: '...',
         health: null,
         now: '',
@@ -26,7 +29,6 @@ function app() {
         showBatchImport: false,
         batchImportText: '',
         batchImportResults: null,
-        imageCopied: false,
         lf: 'all',
         loading: { usage: false, logs: false, models: false, health: false, addAcc: false, localCodexLogin: false, settings: false, refreshTokens: false, batchImport: false, exportAccounts: false, importAccountsFile: false, saveProvider: false, fetchModels: false },
         toast: null,
@@ -53,6 +55,11 @@ function app() {
         ],
 
         /* ── computed ── */
+        get section() {
+            if (this.page === 'providers') return 'accounts';
+            if (this.page === 'logs') return 'usage';
+            return this.page;
+        },
         get filtLogs() {
             return this.lf === 'all' ? this.logs : this.logs.filter(l => l.level === this.lf);
         },
@@ -82,9 +89,39 @@ function app() {
                 ...this.endpoints.slice(3),
             ];
         },
+        get activeExample() {
+            const python = this.exampleLang === 'python';
+            switch (this.exampleApi) {
+                case 'responses': return python ? this.responsesPythonExample : this.responsesCurlExample;
+                case 'messages': return python ? this.messagesPythonExample : this.claudeCurlExample;
+                case 'images': return python ? this.imagePythonExample : this.imageCurlExample;
+                default: return python ? this.chatPythonExample : this.curlExample;
+            }
+        },
+        get requestActivity() {
+            const hourMs = 3600000;
+            const endHour = new Date();
+            endHour.setMinutes(0, 0, 0);
+            const start = endHour.getTime() - 23 * hourMs;
+            const hours = Array.from({ length: 24 }, (_, index) => {
+                const time = start + index * hourMs;
+                const label = new Date(time).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false });
+                return { time, label, count: 0 };
+            });
+            let total = 0;
+            for (const log of this.logs) {
+                const bucket = Math.floor((Date.parse(log.time) - start) / hourMs);
+                if (log.type === 'request' && hours[bucket]) {
+                    hours[bucket].count++;
+                    total++;
+                }
+            }
+            const peak = Math.max(1, ...hours.map(hour => hour.count));
+            return { total, hours: hours.map(hour => ({ ...hour, height: hour.count / peak * 100 })) };
+        },
         get todayReqs() {
-            const d = new Date().toISOString().slice(0, 10);
-            return this.logs.filter(l => l.type === 'request' && l.time && l.time.startsWith(d)).length;
+            const midnight = new Date().setHours(0, 0, 0, 0);
+            return this.logs.filter(log => log.type === 'request' && Date.parse(log.time) >= midnight).length;
         },
         get totalTokens() {
             return this.usageData.reduce((s, u) => s + (u.used_tokens || 0), 0);
@@ -232,22 +269,33 @@ print(result.data[0].url)`;
                         .replace(/\bcurl\b/, '<span class="shell-command">curl</span>')
                         .replace(/(https?:\/\/[^\s\\]+)/, '<span class="shell-url">$1</span>');
                 }
-                if (/^\s*-H\b/.test(line)) {
-                    return escaped
-                        .replace(/(^\s*)-H/, '$1<span class="shell-option">-H</span>')
-                        .replace(/("[^"]*")/, '<span class="shell-json">$1</span>');
-                }
-                if (/^\s*-d\b/.test(line)) {
-                    return escaped
-                        .replace(/(^\s*)-d/, '$1<span class="shell-option">-d</span>')
-                        .replace(/('[^']*')/, '<span class="shell-json">$1</span>');
+                if (/^\s*-(H|d)\b/.test(line)) {
+                    return escaped.replace(/^(\s*)(-[Hd])(\s+)(.+?)(\s*\\?)$/,
+                        '$1<span class="shell-option">$2</span>$3<span class="shell-json">$4</span>$5');
                 }
                 return escaped;
             }).join('\n');
         },
 
         /* ── init ── */
+        navigate(page) {
+            this.page = page;
+            this.menuOpen = false;
+            if (page === 'accounts') { this.loadAccounts(); this.loadUsage(); }
+            if (page === 'models' || page === 'settings') this.loadModels();
+            if (page === 'providers') this.loadProviders();
+            if (page === 'usage') this.loadUsage();
+            if (page === 'logs') this.loadLogs();
+            if (page === 'settings') this.loadSettings();
+            this.$nextTick(() => {
+                window.scrollTo(0, 0);
+                this.$refs.pageHeading.focus({ preventScroll: true });
+            });
+        },
         async init() {
+            this.$watch('imageModelsAvailable', available => {
+                if (!available && this.exampleApi === 'images') this.exampleApi = 'chat';
+            });
             this.updateClock();
             setInterval(() => this.updateClock(), 1000);
 
@@ -892,16 +940,7 @@ print(result.data[0].url)`;
         async copyTxt(txt) {
             try { await navigator.clipboard.writeText(txt); this.toast2('已复制', 'success'); } catch { this.toast2('复制失败', 'error'); }
         },
-        async copyImageCommand() {
-            try {
-                await navigator.clipboard.writeText(this.imageCurlExample);
-                this.imageCopied = true;
-                this.toast2('图片生成命令已复制', 'success');
-                setTimeout(() => { this.imageCopied = false; }, 2000);
-            } catch {
-                this.toast2('复制失败', 'error');
-            }
-        },
+
         toast2(msg, type = 'info') {
             this.toast = { msg, type };
             if (this._tt) clearTimeout(this._tt);

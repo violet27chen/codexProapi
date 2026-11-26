@@ -15,75 +15,84 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
 </head>
 <body>
 
-<div x-data="app()" x-init="init()">
+<div x-data="app()">
 
   <!-- Toast -->
-  <div x-show="toast" x-cloak class="toast" :class="'toast-' + (toast?.type||'info')">
+  <div x-show="toast" x-cloak class="toast" role="status" :class="'toast-' + (toast?.type||'info')">
     <span x-text="toast?.msg"></span>
   </div>
 
   <div class="app-shell">
 
     <!-- ── SIDEBAR ── -->
-    <aside class="sidebar">
+    <aside class="sidebar" :class="{'menu-open': menuOpen}" @keydown.escape="menuOpen=false; $refs.menuToggle.focus()">
       <div class="brand">
-        <div class="brand-name">CODEX PRO <span>API</span></div>
-        <div class="brand-meta" x-text="'v' + version"></div>
+        <img class="brand-mark" src="/favicon.svg" alt="" width="36" height="36">
+        <div class="brand-name">CodexPro <span>API</span></div>
+        <button type="button" class="menu-toggle" x-ref="menuToggle" @click="menuOpen=!menuOpen"
+          :aria-expanded="menuOpen" aria-controls="workspace-nav" aria-label="导航菜单">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+        </button>
       </div>
 
-      <nav class="nav">
-        <div class="nav-item" :class="page==='dashboard'&&'active'" @click="page='dashboard'">
+      <nav class="nav" id="workspace-nav" aria-label="主导航">
+        <button type="button" class="nav-item" :class="section==='dashboard'&&'active'"
+          :aria-current="section==='dashboard' ? 'page' : null" @click="navigate('dashboard')">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
-          仪表盘
-        </div>
-        <div class="nav-item" :class="page==='accounts'&&'active'" @click="page='accounts'; loadAccounts(); loadUsage()">
+          运行总览
+        </button>
+        <button type="button" class="nav-item" :class="section==='accounts'&&'active'"
+          :aria-current="section==='accounts' ? 'page' : null" @click="navigate('accounts')">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
-          账号管理
-          <span x-show="accounts.length>0" class="badge badge-info ml-auto" x-text="accounts.length"></span>
-        </div>
-        <div class="nav-item" :class="page==='models'&&'active'" @click="page='models'; loadModels()">
+          接入管理
+        </button>
+        <button type="button" class="nav-item" :class="section==='models'&&'active'"
+          :aria-current="section==='models' ? 'page' : null" @click="navigate('models')">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
           模型可用性
-          <span x-show="models.length>0" class="badge badge-ok ml-auto" x-text="availableModelsCount+'/'+models.length"></span>
-        </div>
-        <div class="nav-item" :class="page==='providers'&&'active'" @click="page='providers'; loadProviders()">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
-          提供商
-          <span x-show="providers.length>0" class="badge badge-info ml-auto" x-text="providers.length"></span>
-        </div>
-        <div class="nav-item" :class="page==='usage'&&'active'" @click="page='usage'; loadUsage()">
+        </button>
+        <button type="button" class="nav-item" :class="section==='usage'&&'active'"
+          :aria-current="section==='usage' ? 'page' : null" @click="navigate('usage')">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-          用量统计
-        </div>
-        <div class="nav-item" :class="page==='logs'&&'active'" @click="page='logs'; loadLogs()">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-          请求日志
-        </div>
-        <div class="nav-item" :class="page==='settings'&&'active'" @click="page='settings'; loadSettings(); loadModels()">
+          用量与日志
+        </button>
+        <button type="button" class="nav-item" :class="section==='settings'&&'active'"
+          :aria-current="section==='settings' ? 'page' : null" @click="navigate('settings')">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
           系统设置
-        </div>
+        </button>
       </nav>
 
       <div class="sidebar-footer">
-        <span class="dot" :class="health==='ok'?'dot-ok':health===null?'dot-gray':'dot-err'"></span>
-        <span x-text="health==='ok'?'运行中':health===null?'连接中':'异常'"></span>
-        <span x-show="adminConfigured && adminAuthenticated" class="admin-logout" @click="logoutAdmin()" title="退出登录">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-        </span>
-        <span class="ml-auto mono text-xs" x-text="now.slice(11,19)"></span>
+        <span class="brand-meta" x-text="'v' + version"></span>
+        <button type="button" x-show="adminConfigured && adminAuthenticated" class="admin-logout ml-auto" @click="logoutAdmin()">退出登录</button>
       </div>
     </aside>
 
     <!-- ── MAIN ── -->
-    <div class="main-area">
+    <main class="main-area">
 
       <!-- Page header -->
       <div class="page-header">
-        <span class="page-title" x-text="{dashboard:'仪表盘',accounts:'账号管理',models:'模型可用性',providers:'提供商',usage:'用量统计',logs:'请求日志',settings:'系统设置'}[page]"></span>
-        <div class="header-actions">
+        <h1 class="page-title" x-ref="pageHeading" tabindex="-1" x-text="{dashboard:'运行总览',accounts:'接入管理',models:'模型可用性',usage:'用量与日志',settings:'系统设置'}[section]"></h1>
+        <div class="overview-status" x-show="page==='dashboard'">
+          <time class="mono" x-text="now"></time>
+          <span class="service-status"><span class="dot" :class="health==='ok'?'dot-ok':health===null?'dot-gray':'dot-err'"></span>
+        <span x-text="health==='ok'?'运行中':health===null?'连接中':'异常'"></span></span>
+        </div>
+      </div>
+      <div class="workspace-tools" x-show="page!=='dashboard'" x-cloak>
+        <nav class="section-switch" x-show="section==='accounts'" aria-label="接入管理视图">
+          <button type="button" :aria-current="page==='accounts' ? 'page' : null" @click="navigate('accounts')">Codex 账号</button>
+          <button type="button" :aria-current="page==='providers' ? 'page' : null" @click="navigate('providers')">上游提供商</button>
+        </nav>
+        <nav class="section-switch" x-show="section==='usage'" aria-label="用量与日志视图">
+          <button type="button" :aria-current="page==='usage' ? 'page' : null" @click="navigate('usage')">用量与配额</button>
+          <button type="button" :aria-current="page==='logs' ? 'page' : null" @click="navigate('logs')">请求日志</button>
+        </nav>
+        <div class="header-actions" x-show="['accounts','models','providers','logs','settings'].includes(page)" x-cloak>
           <!-- accounts actions -->
-          <div class="flex gap-2" x-show="page==='accounts'">
+          <div class="account-actions" x-show="page==='accounts'">
             <button type="button" class="btn" @click="checkAccountsHealth()" :class="{'btn-loading':loading.health}">
               <svg x-show="loading.health" class="spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.22-8.56"/></svg>
               健康检查
@@ -121,106 +130,96 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
       </div>
 
       <!-- ════ DASHBOARD ════ -->
-      <div class="content" x-show="page==='dashboard'">
+      <div class="content dashboard" x-show="page==='dashboard'">
         <div class="stats-grid">
-          <div class="stat-card">
-            <div class="stat-label">账号总数</div>
-            <div class="stat-value" x-text="accounts.length"></div>
-            <div class="stat-sub">已配置</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">今日请求</div>
-            <div class="stat-value" x-text="todayReqs"></div>
-            <div class="stat-sub">次</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">Token 用量</div>
-            <div class="stat-value" x-text="formatTok(totalTokens)"></div>
-            <div class="stat-sub">累计</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">可用模型</div>
-            <div class="stat-value" x-text="availableModelsCount"></div>
-            <div class="stat-sub" x-text="models.length ? '/ ' + models.length + ' 个' : '未探测'"></div>
-          </div>
+          <button type="button" class="stat-card metric-link" @click="navigate('accounts')">
+            <span class="stat-label">账号总数<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 20v-2a4 4 0 014-4h5a4 4 0 014 4v2 M9.5 3a4 4 0 100 8 4 4 0 000-8 M17 5a3 3 0 010 6m1 4a4 4 0 013 4"/></svg></span>
+            <span class="stat-value" x-text="accounts.length"></span>
+            <span class="stat-sub">已配置</span></button>
+          <button type="button" class="stat-card metric-link" @click="navigate('logs')">
+            <span class="stat-label">今日请求<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M2 12h4l3-8 5 16 3-8h5"/></svg></span>
+            <span class="stat-value" x-text="todayReqs"></span>
+            <span class="stat-sub">日志内记录</span></button>
+          <button type="button" class="stat-card metric-link" @click="navigate('usage')">
+            <span class="stat-label">Token 用量<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 5h14v14H5z M9 2v3m6-3v3M9 19v3m6-3v3M2 9h3m-3 6h3m14-6h3m-3 6h3 M9 9h6v6H9z"/></svg></span>
+            <span class="stat-value" x-text="formatTok(totalTokens)"></span>
+            <span class="stat-sub">累计</span></button>
+          <button type="button" class="stat-card metric-link" @click="navigate('models')">
+            <span class="stat-label">可用模型<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M2 7l10-5 10 5-10 5z M2 12l10 5 10-5M2 17l10 5 10-5"/></svg></span>
+            <span class="stat-value" x-text="availableModelsCount"></span>
+            <span class="stat-sub" x-text="models.length ? '/ ' + models.length + ' 个' : '未探测'"></span></button>
         </div>
 
-        <div class="card">
-          <div class="card-title">接口端点</div>
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>方法</th><th>路径</th><th>说明</th></tr></thead>
-              <tbody>
-                <template x-for="(ep, idx) in displayedEndpoints" :key="idx">
-                  <tr>
-                    <td><span class="badge badge-info mono" x-text="ep.m"></span></td>
-                    <td class="mono" x-text="ep.path"></td>
-                    <td class="text-muted" x-text="ep.desc"></td>
-                  </tr>
-                </template>
-              </tbody>
-            </table>
+        <div class="overview-grid">
+          <section class="card activity-panel">
+            <div class="panel-heading"><h2 class="card-title">请求趋势</h2><span class="text-muted text-xs">近 24 小时</span></div>
+            <div class="activity-summary"><strong x-text="requestActivity.total"></strong><span>次已记录请求</span></div>
+            <div class="plot" role="img" :aria-label="'最近日志中，近 24 小时共 ' + requestActivity.total + ' 次请求'">
+              <template x-for="hour in requestActivity.hours" :key="hour.time">
+                <div class="plot-slot" :title="hour.label + ' · ' + hour.count + ' 次请求'">
+                  <div class="plot-bar" :style="{height: hour.height + '%'}"></div>
+                </div>
+              </template>
+              <span class="plot-empty" x-show="!requestActivity.total">暂无请求记录</span>
+            </div>
+            <div class="axis"><span x-text="requestActivity.hours[0].label"></span><span x-text="requestActivity.hours[12].label"></span><span>当前</span></div>
+          </section>
+          <div class="card recent-panel">
+            <div class="panel-heading"><h2 class="card-title">最近日志</h2><button type="button" class="text-action" @click="navigate('logs')">查看全部 <span aria-hidden="true">→</span></button></div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>时间</th><th>路径</th><th>状态</th><th>耗时</th></tr></thead>
+                <tbody>
+                  <tr x-show="logs.length===0"><td colspan="4" class="empty">暂无日志记录</td></tr>
+                  <template x-for="(l, idx) in logs.slice(0,8)" :key="idx">
+                    <tr>
+                      <td class="mono text-dim" x-text="fmtTime(l.time)"></td>
+                      <td class="mono" x-text="(l.method||'')+ ' ' +(l.path||'')"></td>
+                      <td>
+                        <span class="badge" :class="l.level==='SUCCESS'?'badge-ok':l.level==='WARN'?'badge-warn':'badge-err'" x-text="l.status||l.level"></span>
+                      </td>
+                      <td class="text-muted" x-text="l.ms!=null ? l.ms+'ms' : ''"></td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
-
-        <div class="card">
-          <div class="card-title">OpenAI Chat Completions 调用示例</div>
-          <div class="text-muted text-xs mono" x-text="`POST /v1/chat/completions · Base URL: ${baseUrl}/v1`"></div>
-          <pre class="code-block" x-html="highlightShellCommand(curlExample)"></pre>
-          <button type="button" class="btn btn-sm mt-2" @click="copyTxt(curlExample)">复制 curl</button>
-          <pre class="code-block mt-2" x-html="highlightPython(chatPythonExample)"></pre>
-          <button type="button" class="btn btn-sm mt-2" @click="copyTxt(chatPythonExample)">复制 Python</button>
-        </div>
-
-        <div class="card">
-          <div class="card-title">OpenAI Responses API 调用示例</div>
-          <div class="text-muted text-xs mono" x-text="`POST /v1/responses · Base URL: ${baseUrl}/v1`"></div>
-          <pre class="code-block" x-html="highlightShellCommand(responsesCurlExample)"></pre>
-          <button type="button" class="btn btn-sm mt-2" @click="copyTxt(responsesCurlExample)">复制 curl</button>
-          <pre class="code-block mt-2" x-html="highlightPython(responsesPythonExample)"></pre>
-          <button type="button" class="btn btn-sm mt-2" @click="copyTxt(responsesPythonExample)">复制 Python</button>
-        </div>
-
-        <div class="card">
-          <div class="card-title">Claude Messages 调用示例（响应为 OpenAI 格式）</div>
-          <div class="text-muted text-xs mono" x-text="`POST /v1/messages · Base URL: ${baseUrl}`"></div>
-          <pre class="code-block" x-html="highlightShellCommand(claudeCurlExample)"></pre>
-          <button type="button" class="btn btn-sm mt-2" @click="copyTxt(claudeCurlExample)">复制 curl</button>
-          <pre class="code-block mt-2" x-html="highlightPython(messagesPythonExample)"></pre>
-          <button type="button" class="btn btn-sm mt-2" @click="copyTxt(messagesPythonExample)">复制 Python</button>
-        </div>
-
-        <div class="card" x-show="imageModelsAvailable">
-          <div class="card-title">图片生成调用示例（模型自动获取）</div>
-          <div class="text-muted text-xs mono" x-text="`POST /v1/images/generations · Base URL: ${baseUrl}`"></div>
-          <div class="code-block-wrap mt-2">
-            <pre class="code-block" x-html="highlightShellCommand(imageCurlExample)"></pre>
-            <button type="button" class="btn btn-sm code-copy-btn" @click="copyImageCommand()" x-text="imageCopied ? '已复制' : '复制命令'"></button>
+          <div class="card">
+            <div class="card-title">接口端点</div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>方法</th><th>路径</th><th>说明</th></tr></thead>
+                <tbody>
+                  <template x-for="(ep, idx) in displayedEndpoints" :key="idx">
+                    <tr>
+                      <td><span class="method-tag mono" :class="ep.m==='GET' && 'method-get'" x-text="ep.m"></span></td>
+                      <td class="mono" x-text="ep.path"></td>
+                      <td class="text-muted" x-text="ep.desc"></td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
           </div>
-          <pre class="code-block mt-2" x-html="highlightPython(imagePythonExample)"></pre>
-          <button type="button" class="btn btn-sm mt-2" @click="copyTxt(imagePythonExample)">复制 Python</button>
-        </div>
 
-        <div class="card">
-          <div class="card-title">最近日志</div>
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>时间</th><th>路径</th><th>状态</th><th>耗时</th></tr></thead>
-              <tbody>
-                <tr x-show="logs.length===0"><td colspan="4" class="empty">暂无日志</td></tr>
-                <template x-for="(l, idx) in logs.slice(0,8)" :key="idx">
-                  <tr>
-                    <td class="mono text-dim" x-text="fmtTime(l.time)"></td>
-                    <td class="mono" x-text="(l.method||'')+ ' ' +(l.path||'')"></td>
-                    <td>
-                      <span class="badge" :class="l.level==='SUCCESS'?'badge-ok':l.level==='WARN'?'badge-warn':'badge-err'" x-text="l.status||l.level"></span>
-                    </td>
-                    <td class="text-muted" x-text="l.ms!=null ? l.ms+'ms' : ''"></td>
-                  </tr>
-                </template>
-              </tbody>
-            </table>
-          </div>
+          <section class="card example-panel">
+            <div class="panel-heading"><h2 class="card-title">调用示例</h2>
+              <select aria-label="选择接口示例" x-model="exampleApi">
+                <option value="chat">Chat Completions</option><option value="responses">Responses API</option>
+                <option value="messages">Claude Messages</option>
+                <template x-if="imageModelsAvailable"><option value="images">图片生成</option></template>
+              </select>
+            </div>
+            <div class="code-toolbar">
+              <div class="language-switch" aria-label="示例语言" role="group">
+                <button type="button" :aria-pressed="exampleLang==='curl'" @click="exampleLang='curl'">curl</button>
+                <button type="button" :aria-pressed="exampleLang==='python'" @click="exampleLang='python'">Python</button>
+              </div>
+              <button type="button" class="text-action" @click="copyTxt(activeExample)">复制代码</button>
+            </div>
+            <pre class="code-block" tabindex="0" aria-label="调用示例代码" x-html="exampleLang==='curl' ? highlightShellCommand(activeExample) : highlightPython(activeExample)"></pre>
+          </section>
         </div>
       </div>
 
@@ -258,7 +257,7 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
                 </tr>
               </thead>
               <tbody>
-                <tr x-show="accounts.length===0"><td colspan="7" class="empty">暂无账号，点击右上角添加</td></tr>
+                <tr x-show="accounts.length===0"><td colspan="7" class="empty">暂无账号，可通过「添加账号」或「导入账号文件」接入</td></tr>
                 <template x-for="(acc, idx) in accounts" :key="idx">
                   <tr>
                     <td class="text-muted" x-text="acc.index+1"></td>
@@ -347,7 +346,7 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
             <table>
               <thead><tr><th>名称(前缀)</th><th>类型</th><th>Base URL</th><th>Key</th><th>模型</th><th>状态</th><th>操作</th></tr></thead>
               <tbody>
-                <tr x-show="providers.length===0"><td colspan="7" class="empty">还没有提供商，点右上角“+ 添加提供商”</td></tr>
+                <tr x-show="providers.length===0"><td colspan="7" class="empty">暂无上游提供商，点击「添加提供商」接入</td></tr>
                 <template x-for="(p, idx) in providers" :key="p.id">
                   <tr>
                     <td class="mono" x-text="p.name"></td>
@@ -441,10 +440,10 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
       <!-- ════ LOGS ════ -->
       <div class="content" x-show="page==='logs'" x-cloak>
         <div class="tab-bar">
-          <div class="tab-item" :class="lf==='all'&&'active'" @click="lf='all'">全部</div>
-          <div class="tab-item" :class="lf==='SUCCESS'&&'active'" @click="lf='SUCCESS'">成功</div>
-          <div class="tab-item" :class="lf==='WARN'&&'active'" @click="lf='WARN'">警告</div>
-          <div class="tab-item" :class="lf==='ERR'&&'active'" @click="lf='ERR'">错误</div>
+          <button type="button" class="tab-item" :aria-pressed="lf==='all'" :class="lf==='all'&&'active'" @click="lf='all'">全部</button>
+          <button type="button" class="tab-item" :aria-pressed="lf==='SUCCESS'" :class="lf==='SUCCESS'&&'active'" @click="lf='SUCCESS'">成功</button>
+          <button type="button" class="tab-item" :aria-pressed="lf==='WARN'" :class="lf==='WARN'&&'active'" @click="lf='WARN'">警告</button>
+          <button type="button" class="tab-item" :aria-pressed="lf==='ERR'" :class="lf==='ERR'&&'active'" @click="lf='ERR'">错误</button>
         </div>
         <div class="card">
           <div class="table-wrap">
@@ -470,8 +469,8 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
       </div>
 
       <!-- ════ SETTINGS ════ -->
-      <div class="content" x-show="page==='settings'" x-cloak>
-        <div class="card" style="max-width:560px">
+      <div class="content settings-grid" x-show="page==='settings'" x-cloak>
+        <div class="card">
           <div class="card-title">API 鉴权</div>
           <div class="form-row">
             <label class="form-label">API Key（留空则不鉴权）</label>
@@ -482,7 +481,7 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
           </div>
         </div>
 
-        <div class="card" style="max-width:560px">
+        <div class="card">
           <div class="card-title">默认对话模型</div>
           <div class="form-row">
             <label class="form-label">未在请求中指定模型时使用</label>
@@ -502,13 +501,13 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
         </div>
 
 
-        <div class="card" style="max-width:560px">
+        <div class="card">
           <div class="card-title">Token 自动刷新</div>
           <div class="flex items-center gap-2" style="margin-bottom:12px">
             <span class="badge" :class="refreshStatus.active?'badge-ok':'badge-gray'"
               x-text="refreshStatus.active?'运行中':'未启动'"></span>
             <span class="text-muted text-sm" x-show="refreshStatus.lastRun>0"
-              x-text="'上次：' + fmtTime(new Date(refreshStatus.lastRun).toISOString())"></span>
+              x-text="'上次：' + fmtTime(refreshStatus.lastRun)"></span>
             <button type="button" class="btn ml-auto" @click="manualRefreshTokens()">
               <svg x-show="loading.refreshTokens||refreshStatus.isRefreshing" class="spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.22-8.56"/></svg>
               <span x-text="loading.refreshTokens||refreshStatus.isRefreshing?'刷新中…':'立即刷新'"></span>
@@ -523,7 +522,7 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
         </div>
       </div>
 
-    </div><!-- /main-area -->
+    </main><!-- /main-area -->
   </div><!-- /app-shell -->
 
   <!-- ── ADD ACCOUNT MODAL ── -->
@@ -531,14 +530,14 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
     <div class="modal" @click.stop>
       <div class="modal-header">
         <span class="modal-title" x-text="accountEditIndex !== null ? '修改账号' : '添加账号'"></span>
-        <button type="button" class="modal-close" @click="showAdd=false">
+        <button type="button" class="modal-close" aria-label="关闭" @click="showAdd=false">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
       <div class="tab-bar" x-show="accountEditIndex === null">
-        <div class="tab-item" :class="af.mode==='browser'&&'active'" @click="af.mode='browser'">浏览器登录</div>
-        <div class="tab-item" :class="af.mode==='json'&&'active'" @click="af.mode='json'">粘贴 auth.json</div>
-        <div class="tab-item" :class="af.mode==='manual'&&'active'" @click="af.mode='manual'">手动填写</div>
+        <button type="button" class="tab-item" :aria-pressed="af.mode==='browser'" :class="af.mode==='browser'&&'active'" @click="af.mode='browser'">浏览器登录</button>
+        <button type="button" class="tab-item" :aria-pressed="af.mode==='json'" :class="af.mode==='json'&&'active'" @click="af.mode='json'">粘贴 auth.json</button>
+        <button type="button" class="tab-item" :aria-pressed="af.mode==='manual'" :class="af.mode==='manual'&&'active'" @click="af.mode='manual'">手动填写</button>
       </div>
       <div class="form-row" x-show="af.mode!=='browser'">
         <label class="form-label">账号名称（可选）</label>
@@ -592,7 +591,7 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
     <div class="modal" @click.stop style="max-width:550px">
       <div class="modal-header">
         <span class="modal-title">批量导入账号</span>
-        <button type="button" class="modal-close" @click="showBatchImport=false">
+        <button type="button" class="modal-close" aria-label="关闭" @click="showBatchImport=false">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
@@ -630,12 +629,7 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
 <!-- Admin login modal -->
 <div
   x-show="showAdminModal"
-  x-transition:enter="ease-out duration-200"
-  x-transition:enter-start="opacity-0"
-  x-transition:enter-end="opacity-100"
-  x-transition:leave="ease-in duration-150"
-  x-transition:leave-start="opacity-100"
-  x-transition:leave-end="opacity-0"
+  x-cloak
   class="modal-backdrop"
   @keydown.enter="submitAdminLogin()"
 >
@@ -667,9 +661,9 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
 <!-- Provider add/edit modal -->
 <div class="overlay" x-show="showProvider" x-cloak @keydown.escape.window="showProvider=false">
   <div class="modal" style="max-width:520px">
-    <div class="modal-head">
+    <div class="modal-header">
       <div class="modal-title" x-text="pf.index==null ? '添加提供商' : '修改提供商'"></div>
-      <button type="button" class="modal-close" @click="showProvider=false">×</button>
+      <button type="button" class="modal-close" aria-label="关闭" @click="showProvider=false">×</button>
     </div>
     <div class="modal-body">
       <div class="form-row">
@@ -707,7 +701,7 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
       </div>
       <div class="text-muted text-xs">调用时模型写 <span class="mono">提供商名/模型id</span>（两段）。若上游真实 id 本身带斜杠（如 <span class="mono">deepseek/deepseek-v4.1-flash</span>），在此用 <span class="mono">显示名=真实id</span> 声明，调用时只写 <span class="mono" x-text="pf.name?(pf.name+'/显示名'):'提供商名/显示名'"></span> 即可。</div>
     </div>
-    <div class="modal-foot">
+    <div class="modal-footer">
       <button type="button" class="btn" @click="showProvider=false">取消</button>
       <button type="button" class="btn btn-primary" @click="saveProvider()" :class="{'btn-loading':loading.saveProvider}">保存</button>
     </div>
