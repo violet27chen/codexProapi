@@ -14,14 +14,30 @@ function app() {
         accounts: [],
         accHealth: {},
         usageData: [],
+        gatewayUsage: null,
+        gatewayPeriod: 'day',
+        gatewayDate: '',
+        gatewayKey: '',
+        gatewayRequest: 0,
+        gatewayUsageLoading: false,
+        gatewayUsageError: '',
         models: [],
         modelsLastProbed: 0,
         modelsCatalogError: '',
         modelsInProgress: false,
         logs: [],
-        cfg: { api_key: '', default_model: '', token_refresh_interval_minutes: 60 },
+        cfg: { default_model: '', token_refresh_interval_minutes: 60 },
         refreshStatus: { active: false, intervalMinutes: 60, lastRun: 0, lastSummary: null, isRefreshing: false },
-        showKey: false,
+        apiKeys: [],
+        apiKeyRequired: false,
+        apiKeysLoading: false,
+        apiKeysError: '',
+        showApiKeyDialog: false,
+        apiKeyName: '',
+        apiKeyLifetime: '30',
+        newApiKey: '',
+        apiKeySaving: false,
+        revokingApiKey: null,
         showAdd: false,
         accountEditIndex: null,
         localCodexLoginStatus: { status: 'idle', message: '', output: '' },
@@ -130,17 +146,14 @@ function app() {
             try { return location.origin.replace(/\/+$/, ''); } catch { return ''; }
         },
         get curlExample() {
-            const k = this.cfg.api_key;
-            const auth = k ? `  -H "Authorization: Bearer ${k}" \\\n` : '';
             const model = this.cfg.default_model || this.selectableModels[0]?.id || '自动获取的模型 ID';
             const body = { model, messages: [{ role: 'user', content: '你好' }], stream: false };
             return `curl -sS ${this.baseUrl}/v1/chat/completions \\
   -H "Content-Type: application/json" \\
-${auth}  -d '${JSON.stringify(body)}'`;
+  -H "Authorization: Bearer <API_KEY>" \\
+  -d '${JSON.stringify(body)}'`;
         },
         get claudeCurlExample() {
-            const k = this.cfg.api_key;
-            const auth = k ? `  -H "x-api-key: ${k}" \\\n` : '';
             const model = this.cfg.default_model || this.selectableModels[0]?.id || '自动获取的模型 ID';
             const body = {
                 model,
@@ -151,32 +164,30 @@ ${auth}  -d '${JSON.stringify(body)}'`;
             };
             return `curl -sS ${this.baseUrl}/v1/messages \\
   -H "Content-Type: application/json" \\
-${auth}  -d '${JSON.stringify(body)}'`;
+  -H "x-api-key: <API_KEY>" \\
+  -d '${JSON.stringify(body)}'`;
         },
         get responsesCurlExample() {
-            const k = this.cfg.api_key;
-            const auth = k ? `  -H "Authorization: Bearer ${k}" \\\n` : '';
             const model = this.cfg.default_model || this.selectableModels[0]?.id || '自动获取的模型 ID';
             const body = { model, input: '你好', stream: false };
             return `curl -sS ${this.baseUrl}/v1/responses \\
   -H "Content-Type: application/json" \\
-${auth}  -d '${JSON.stringify(body)}'`;
+  -H "Authorization: Bearer <API_KEY>" \\
+  -d '${JSON.stringify(body)}'`;
         },
         get imageCurlExample() {
-            const k = this.cfg.api_key;
-            const auth = k ? `  -H "Authorization: Bearer ${k}" \\\n` : '';
             const imageModel = this.models.find(m => m.type === 'image' && m.available !== false)?.id;
             const body = { prompt: '一只橘猫坐在窗边', n: 1, size: '1024x1024', ...(imageModel ? { model: imageModel } : {}) };
             return `curl -sS ${this.baseUrl}/v1/images/generations \\
   -H "Content-Type: application/json" \\
-${auth}  -d '${JSON.stringify(body)}'`;
+  -H "Authorization: Bearer <API_KEY>" \\
+  -d '${JSON.stringify(body)}'`;
         },
         get chatPythonExample() {
-            const k = this.cfg.api_key || '<API_KEY>';
             const model = this.cfg.default_model || this.selectableModels[0]?.id || '<MODEL>';
             return `from openai import OpenAI
 
-client = OpenAI(api_key="${k}", base_url="${this.baseUrl}/v1")
+client = OpenAI(api_key="<API_KEY>", base_url="${this.baseUrl}/v1")
 
 completion = client.chat.completions.create(
     model="${model}",
@@ -185,11 +196,10 @@ completion = client.chat.completions.create(
 print(completion.choices[0].message.content)`;
         },
         get responsesPythonExample() {
-            const k = this.cfg.api_key || '<API_KEY>';
             const model = this.cfg.default_model || this.selectableModels[0]?.id || '<MODEL>';
             return `from openai import OpenAI
 
-client = OpenAI(api_key="${k}", base_url="${this.baseUrl}/v1")
+client = OpenAI(api_key="<API_KEY>", base_url="${this.baseUrl}/v1")
 
 response = client.responses.create(
     model="${model}",
@@ -198,7 +208,6 @@ response = client.responses.create(
 print(response.output_text)`;
         },
         get messagesPythonExample() {
-            const k = this.cfg.api_key || '<API_KEY>';
             const model = this.cfg.default_model || this.selectableModels[0]?.id || '<MODEL>';
             return `import requests
 
@@ -206,7 +215,7 @@ resp = requests.post(
     "${this.baseUrl}/v1/messages",
     headers={
         "Content-Type": "application/json",
-        "x-api-key": "${k}",
+        "x-api-key": "<API_KEY>",
     },
     json={
         "model": "${model}",
@@ -220,12 +229,11 @@ resp.raise_for_status()
 print(resp.json())`;
         },
         get imagePythonExample() {
-            const k = this.cfg.api_key || '<API_KEY>';
             const imageModel = this.models.find(m => m.type === 'image' && m.available !== false)?.id;
             const modelLine = imageModel ? `    model="${imageModel}",\n` : '';
             return `from openai import OpenAI
 
-client = OpenAI(api_key="${k}", base_url="${this.baseUrl}/v1")
+client = OpenAI(api_key="<API_KEY>", base_url="${this.baseUrl}/v1")
 
 result = client.images.generate(
 ${modelLine}    prompt="一只橘猫坐在窗边",
@@ -284,8 +292,12 @@ print(result.data[0].url)`;
             if (page === 'accounts') { this.loadAccounts(); this.loadUsage(); }
             if (page === 'models' || page === 'settings') this.loadModels();
             if (page === 'providers') this.loadProviders();
-            if (page === 'usage') this.loadUsage();
+            if (page === 'usage') {
+                this.loadUsage();
+                this.loadGatewayUsage();
+            }
             if (page === 'logs') this.loadLogs();
+            if (page === 'apiKeys') this.loadApiKeys();
             if (page === 'settings') this.loadSettings();
             this.$nextTick(() => {
                 window.scrollTo(0, 0);
@@ -478,7 +490,6 @@ print(result.data[0].url)`;
                 const d = await r.json();
                 if (d.ok) {
                     this.cfg = {
-                        api_key: d.api_key || '',
                         default_model: d.default_model || '',
                         token_refresh_interval_minutes: d.token_refresh_interval_minutes || 60,
                     };
@@ -488,6 +499,104 @@ print(result.data[0].url)`;
                     this.toast2('保存失败', 'error');
                 }
             } catch (e) { this.toast2('保存失败：' + e.message, 'error'); } finally { this.loading.settings = false; }
+        },
+
+        changeGatewayPeriod() {
+            if (this.gatewayDate) {
+                this.gatewayDate = this.gatewayPeriod === 'month' ? this.gatewayDate.slice(0, 7) : this.gatewayDate + '-01';
+            }
+            this.loadGatewayUsage();
+        },
+        async loadGatewayUsage() {
+            const request = ++this.gatewayRequest;
+            this.gatewayUsageLoading = true;
+            this.gatewayUsageError = '';
+            try {
+                const params = new URLSearchParams({ period: this.gatewayPeriod, key: this.gatewayKey });
+                if (this.gatewayDate) params.set('date', this.gatewayDate);
+                const response = await fetch('/api/usage/gateway?' + params);
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || '读取网关用量失败');
+                if (request !== this.gatewayRequest) return;
+                this.gatewayUsage = data;
+                this.gatewayDate = data.date;
+            } catch (error) {
+                if (request === this.gatewayRequest) this.gatewayUsageError = error.message;
+            } finally {
+                if (request === this.gatewayRequest) this.gatewayUsageLoading = false;
+            }
+        },
+        async loadApiKeys() {
+            if (!this.adminConfigured || this.apiKeysLoading) return;
+            this.apiKeysLoading = true;
+            this.apiKeysError = '';
+            try {
+                const response = await fetch('/api/api-keys');
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || '读取 API Key 失败');
+                this.apiKeys = data.keys;
+                this.apiKeyRequired = data.required;
+            } catch (error) {
+                this.apiKeysError = error.message;
+            } finally {
+                this.apiKeysLoading = false;
+            }
+        },
+        openApiKeyDialog() {
+            this.apiKeyName = '';
+            this.apiKeyLifetime = '30';
+            this.newApiKey = '';
+            this.showApiKeyDialog = true;
+            this.$nextTick(() => this.$refs.apiKeyName.focus());
+        },
+        closeApiKeyDialog() {
+            if (this.apiKeySaving) return;
+            this.showApiKeyDialog = false;
+            this.newApiKey = '';
+            this.$nextTick(() => this.$refs.createApiKeyButton.focus());
+        },
+        async createApiKey() {
+            if (this.apiKeySaving || this.newApiKey) return;
+            this.apiKeySaving = true;
+            try {
+                const response = await fetch('/api/api-keys', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: this.apiKeyName,
+                        expires_in_days: this.apiKeyLifetime ? Number(this.apiKeyLifetime) : null,
+                    }),
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || '创建 API Key 失败');
+                this.newApiKey = data.token;
+                this.apiKeys = [data.key, ...this.apiKeys];
+                this.apiKeyRequired = true;
+                this.$nextTick(() => this.$refs.createdApiKey.focus());
+            } catch (error) {
+                this.toast2(error.message, 'error');
+            } finally {
+                this.apiKeySaving = false;
+            }
+        },
+        async revokeApiKey(key) {
+            if (this.revokingApiKey || !confirm('撤销「' + key.name + '」后，使用此 Key 的客户端将无法继续请求。确定撤销？')) return;
+            this.revokingApiKey = key.id;
+            try {
+                const response = await fetch('/api/api-keys/' + encodeURIComponent(key.id), { method: 'DELETE' });
+                if (!response.ok) throw new Error((await response.json()).error || '撤销 API Key 失败');
+                await this.loadApiKeys();
+                this.toast2('API Key 已撤销', 'success');
+            } catch (error) {
+                this.toast2(error.message, 'error');
+            } finally {
+                this.revokingApiKey = null;
+            }
+        },
+        formatKeyDate(value) {
+            return new Date(value).toLocaleString('zh-CN', {
+                year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+            });
         },
 
         /* ── accounts ── */

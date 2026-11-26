@@ -84,7 +84,7 @@ Configure your client using the following settings:
 |---------|-------|
 | Base URL | http://localhost:1455/v1 (must include /v1; or your custom host/port + /v1) |
 | Model | Any model returned by `GET /v1/models`; choose a default in System Settings or pass a model ID in each request |
-| API Key | Any value (not validated; authentication is derived from your configured accounts) |
+| API Key | A client key created on the API Keys page when gateway authentication is enabled |
 
 ### OpenAI request formats
 
@@ -106,8 +106,12 @@ curl http://localhost:1455/v1/responses \
 
 1. Add accounts at http://localhost:1455/ on the Accounts page via OAuth login, manual JSON input, Batch Import, or **Log in with Local Codex** to start `codex login`. After login succeeds, it automatically imports the local Codex session; an existing authenticated session is reused directly.
 2. If needed, click Modify next to the account in the proxy column to bind a dedicated proxy (e.g. http://127.0.0.1:7890).
-3. In your client (Cline, Cursor, etc.), specify the Base URL and model names as described above. Set the API Key to any string.
+3. Configure `ADMIN_PASSWORD`, sign in to the admin console, and create a key on the API Keys page. The full key appears only at creation. Copy it into your client along with the Base URL, or pass it in the `Authorization: Bearer <API_KEY>` header.
 4. Send requests normally. The proxy handles routing, rotation, and auto-refresh behind the scenes.
+
+After creating the first key, gateway requests require a valid key. When upgrading from a legacy shared key, create new client keys and update your clients. If every key has expired or been revoked, create a new key in the admin console to resume access.
+
+In Usage & Logs, filter gateway usage by day or month in Asia/Shanghai time and by client API key. Existing upstream account totals and quotas appear on the same page.
 
 ---
 

@@ -1014,15 +1014,13 @@ export async function handleChatCompletions(
       const { response: backendRes, model: backendModel, auth: usedAuth } = await callCodexBackend(openaiReq, provider);
       const who = usedAuth || auth;
       const promptTokens = await estimatePromptTokens(openaiReq);
+      const trackTokens = (completionTokens) => {
+        const usage = { prompt_tokens: promptTokens, completion_tokens: completionTokens };
+        if (res.locals) res.locals.gatewayUsage = usage;
+        if (who?.accountId) recordUsage(who.accountId, usage);
+      };
       if (stream) {
-        const onFinish = (completionChars) => {
-          if (who?.accountId) {
-            recordUsage(who.accountId, {
-              prompt_tokens: promptTokens,
-              completion_tokens: Math.ceil(completionChars / 4),
-            });
-          }
-        };
+        const onFinish = completionChars => trackTokens(Math.ceil(completionChars / 4));
         if (responseFormat === 'response') {
           await pipeStreamToResponses(backendRes.body, res, backendModel, {
             promptTokens,
@@ -1045,9 +1043,7 @@ export async function handleChatCompletions(
       const completionTokens = Math.ceil(
         (text.length + toolCalls.reduce((sum, call) => sum + call.function.arguments.length, 0)) / 4
       );
-      if (who?.accountId) {
-        recordUsage(who.accountId, { prompt_tokens: promptTokens, completion_tokens: completionTokens });
-      }
+      trackTokens(completionTokens);
       const completion = {
         id,
         object: 'chat.completion',

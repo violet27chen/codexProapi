@@ -22,7 +22,7 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
     <span x-text="toast?.msg"></span>
   </div>
 
-  <div class="app-shell">
+  <div class="app-shell" :inert="showApiKeyDialog ? '' : null">
 
     <!-- ── SIDEBAR ── -->
     <aside class="sidebar" :class="{'menu-open': menuOpen}" @keydown.escape="menuOpen=false; $refs.menuToggle.focus()">
@@ -61,6 +61,11 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
           系统设置
         </button>
+        <button type="button" class="nav-item" :class="section==='apiKeys'&&'active'"
+          :aria-current="section==='apiKeys' ? 'page' : null" @click="navigate('apiKeys')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="m11 12 8-8 2 2m-5 1 2 2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          API 密钥
+        </button>
       </nav>
 
       <div class="sidebar-footer">
@@ -74,7 +79,7 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
 
       <!-- Page header -->
       <div class="page-header">
-        <h1 class="page-title" x-ref="pageHeading" tabindex="-1" x-text="{dashboard:'运行总览',accounts:'接入管理',models:'模型可用性',usage:'用量与日志',settings:'系统设置'}[section]"></h1>
+        <h1 class="page-title" x-ref="pageHeading" tabindex="-1" x-text="{dashboard:'运行总览',accounts:'接入管理',models:'模型可用性',usage:'用量与日志',settings:'系统设置',apiKeys:'API 密钥'}[section]"></h1>
         <div class="overview-status" x-show="page==='dashboard'">
           <time class="mono" x-text="now"></time>
           <span class="service-status"><span class="dot" :class="health==='ok'?'dot-ok':health===null?'dot-gray':'dot-err'"></span>
@@ -211,6 +216,7 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
                 <template x-if="imageModelsAvailable"><option value="images">图片生成</option></template>
               </select>
             </div>
+            <p class="text-muted text-xs example-auth-note">启用 API 鉴权时，使用在 <button type="button" class="text-action" @click="navigate('apiKeys')">API 密钥</button> 页面创建的 Key 替换 <code class="mono">&lt;API_KEY&gt;</code>。</p>
             <div class="code-toolbar">
               <div class="language-switch" aria-label="示例语言" role="group">
                 <button type="button" :aria-pressed="exampleLang==='curl'" @click="exampleLang='curl'">curl</button>
@@ -374,7 +380,62 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
 
       <!-- ════ USAGE ════ -->
       <div class="content" x-show="page==='usage'" x-cloak>
+        <section class="card">
+          <div class="panel-heading">
+            <h2 class="card-title">网关用量</h2>
+            <button type="button" class="btn btn-sm" :disabled="gatewayUsageLoading" @click="loadGatewayUsage()">刷新统计</button>
+          </div>
+          <div class="usage-filters">
+            <label class="form-label">统计周期
+              <select x-model="gatewayPeriod" @change="changeGatewayPeriod()">
+                <option value="day">按日</option><option value="month">按月</option>
+              </select>
+            </label>
+            <label class="form-label"><span x-text="gatewayPeriod==='month' ? '月份' : '日期'"></span>
+              <input :type="gatewayPeriod==='month' ? 'month' : 'date'" x-model="gatewayDate" @change="loadGatewayUsage()">
+            </label>
+            <label class="form-label">API Key
+              <select x-model="gatewayKey" @change="loadGatewayUsage()">
+                <option value="">全部密钥</option>
+                <template x-for="key in gatewayUsage?.keys || []" :key="key.id">
+                  <option :value="key.id" x-text="key.label"></option>
+                </template>
+              </select>
+            </label>
+          </div>
+          <p class="text-muted text-xs">按北京时间归档。Token 为网关可获取的计量值，Codex 调用使用估算值。</p>
+          <p class="text-muted text-sm mt-2" role="status" x-show="gatewayUsageLoading">正在读取用量…</p>
+          <p class="text-err text-sm mt-2" role="alert" x-show="gatewayUsageError" x-text="gatewayUsageError"></p>
+          <div class="mt-3" x-show="gatewayUsage && !gatewayUsageLoading && !gatewayUsageError">
+            <div class="stats-grid usage-totals">
+              <div class="stat-card">
+                <div class="stat-label">请求数</div><div class="stat-value" x-text="gatewayUsage?.total.requests.toLocaleString()"></div>
+                <div class="stat-sub" x-text="'HTTP 成功 ' + (gatewayUsage?.total.succeeded || 0).toLocaleString()"></div>
+              </div>
+              <div class="stat-card"><div class="stat-label">输入 Token</div><div class="stat-value" x-text="gatewayUsage?.total.input_tokens.toLocaleString()"></div></div>
+              <div class="stat-card"><div class="stat-label">输出 Token</div><div class="stat-value" x-text="gatewayUsage?.total.output_tokens.toLocaleString()"></div></div>
+              <div class="stat-card"><div class="stat-label">生成图片</div><div class="stat-value" x-text="gatewayUsage?.total.images.toLocaleString()"></div></div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>日期</th><th>API Key</th><th>请求</th><th>HTTP 成功</th><th>输入 Token</th><th>输出 Token</th><th>图片</th></tr></thead>
+                <tbody>
+                  <tr x-show="!gatewayUsage?.rows.length"><td class="empty" colspan="7">此筛选条件下暂无用量记录</td></tr>
+                  <template x-for="row in gatewayUsage?.rows || []" :key="row.day + row.key_id">
+                    <tr>
+                      <td class="mono" x-text="row.day"></td><td x-text="row.key_name"></td>
+                      <td x-text="row.requests.toLocaleString()"></td><td x-text="row.succeeded.toLocaleString()"></td>
+                      <td x-text="row.input_tokens.toLocaleString()"></td><td x-text="row.output_tokens.toLocaleString()"></td>
+                      <td x-text="row.images.toLocaleString()"></td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
         <div class="card">
+          <h2 class="card-title">上游账号配额</h2>
           <div class="table-wrap">
             <table>
               <thead><tr><th>账号</th><th>本地 Token 用量</th><th>5 小时剩余</th><th>周剩余</th><th>月剩余</th></tr></thead>
@@ -468,18 +529,51 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
         </div>
       </div>
 
+      <!-- ════ API KEYS ════ -->
+      <div class="content" x-show="page==='apiKeys'" x-cloak>
+        <section class="card key-panel">
+          <div class="panel-heading">
+            <h2 class="card-title">客户端密钥</h2>
+            <button type="button" class="btn btn-primary" x-ref="createApiKeyButton" x-show="adminConfigured"
+              :disabled="apiKeysLoading || !!apiKeysError || !!revokingApiKey" @click="openApiKeyDialog()">创建 API Key</button>
+          </div>
+          <p class="text-muted text-sm" x-show="!adminConfigured">请在服务端设置 ADMIN_PASSWORD，重启服务并登录后管理 API Key。</p>
+          <p class="text-muted text-sm" x-show="adminConfigured">为不同应用或设备创建独立密钥。客户端填写生成的 Key，Base URL 使用 <code class="mono" x-text="baseUrl + '/v1'"></code>。</p>
+          <div class="key-status" x-show="adminConfigured && !apiKeysLoading && !apiKeysError">
+            <span class="badge" :class="apiKeyRequired ? 'badge-ok' : 'badge-gray'" x-text="apiKeyRequired ? '请求需要 API Key' : '当前未启用 API 鉴权'"></span>
+            <span class="text-muted text-sm" x-show="!apiKeyRequired">创建第一把 Key 后，现有客户端也需要配置 Key。</span>
+            <span class="text-muted text-sm" x-show="apiKeyRequired && !apiKeys.some(key => key.status === 'active')">暂无有效 Key。请创建一把以恢复客户端调用。</span>
+          </div>
+          <p class="text-muted text-sm mt-2" x-show="adminConfigured && apiKeysLoading" role="status">正在读取密钥…</p>
+          <div class="key-status" x-show="apiKeysError">
+            <p class="text-err text-sm" role="alert" x-text="apiKeysError"></p>
+            <button type="button" class="btn btn-sm" @click="loadApiKeys()">重试</button>
+          </div>
+          <div class="table-wrap mt-3" x-show="adminConfigured && !apiKeysLoading && !apiKeysError">
+            <table>
+              <thead><tr><th>名称</th><th>密钥前缀</th><th>状态</th><th>创建时间</th><th>到期时间</th><th>操作</th></tr></thead>
+              <tbody>
+                <tr x-show="apiKeys.length===0"><td class="empty" colspan="6">暂无客户端密钥</td></tr>
+                <template x-for="key in apiKeys" :key="key.id">
+                  <tr>
+                    <td x-text="key.name"></td>
+                    <td class="mono text-xs" x-text="key.prefix ? key.prefix + '…' : '—'"></td>
+                    <td><span class="badge" :class="{active:'badge-ok',expired:'badge-warn',revoked:'badge-gray'}[key.status]"
+                      x-text="{active:'有效',expired:'已过期',revoked:'已撤销'}[key.status]"></span></td>
+                    <td x-text="key.created_at ? formatKeyDate(key.created_at) : '—'"></td>
+                    <td x-text="key.expires_at ? formatKeyDate(key.expires_at) : '永不过期'"></td>
+                    <td><button type="button" class="btn btn-sm btn-danger" x-show="key.status!=='revoked'"
+                      :disabled="!!revokingApiKey" @click="revokeApiKey(key)">撤销</button></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
       <!-- ════ SETTINGS ════ -->
       <div class="content settings-grid" x-show="page==='settings'" x-cloak>
-        <div class="card">
-          <div class="card-title">API 鉴权</div>
-          <div class="form-row">
-            <label class="form-label">API Key（留空则不鉴权）</label>
-            <div class="input-row">
-              <input :type="showKey?'text':'password'" x-model="cfg.api_key" placeholder="sk-...">
-              <button type="button" class="btn" @click="showKey=!showKey" x-text="showKey?'隐藏':'显示'"></button>
-            </div>
-          </div>
-        </div>
 
         <div class="card">
           <div class="card-title">默认对话模型</div>
@@ -524,6 +618,41 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
 
     </main><!-- /main-area -->
   </div><!-- /app-shell -->
+
+  <div class="overlay" x-show="showApiKeyDialog" x-cloak @keydown.escape.window="if (showApiKeyDialog) closeApiKeyDialog()">
+    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="key-dialog-title">
+      <div class="modal-header">
+        <h2 class="modal-title" id="key-dialog-title" x-text="newApiKey ? '保存 API Key' : '创建 API Key'"></h2>
+        <button type="button" class="modal-close" aria-label="关闭" :disabled="apiKeySaving" @click="closeApiKeyDialog()">×</button>
+      </div>
+      <form x-show="!newApiKey" @submit.prevent="createApiKey()">
+        <div class="form-row">
+          <label class="form-label" for="key-name">名称</label>
+          <input id="key-name" type="text" x-ref="apiKeyName" x-model.trim="apiKeyName" maxlength="64" placeholder="如 Cursor 或家用服务器" required>
+        </div>
+        <div class="form-row">
+          <label class="form-label" for="key-lifetime">有效期</label>
+          <select id="key-lifetime" x-model="apiKeyLifetime">
+            <option value="30">30 天</option><option value="90">90 天</option><option value="">永不过期</option>
+          </select>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn" :disabled="apiKeySaving" @click="closeApiKeyDialog()">取消</button>
+          <button type="submit" class="btn btn-primary" :disabled="apiKeySaving || !apiKeyName" x-text="apiKeySaving ? '创建中…' : '生成密钥'"></button>
+        </div>
+      </form>
+      <div x-show="newApiKey">
+        <p class="text-muted text-sm">完整密钥只显示一次。请复制并保存到要接入的客户端。</p>
+        <div class="input-row mt-3">
+          <input type="text" class="mono" x-ref="createdApiKey" :value="newApiKey" aria-label="生成的 API Key" readonly @focus="$el.select()">
+          <button type="button" class="btn" @click="copyTxt(newApiKey)">复制密钥</button>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-primary" @click="closeApiKeyDialog()">完成</button>
+        </div>
+      </div>
+    </section>
+  </div>
 
   <!-- ── ADD ACCOUNT MODAL ── -->
   <div class="overlay" x-show="showAdd" x-cloak @keydown.escape.window="showAdd=false">

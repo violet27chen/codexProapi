@@ -7,7 +7,9 @@
  */
 import { randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
+import { StringDecoder } from 'node:string_decoder';
 import { providerKeys, parseKeys } from './providers.js';
+import { createSSEParser } from './sse.js';
 
 const ANTHROPIC_VERSION = '2023-06-01';
 
@@ -142,25 +144,20 @@ export function googleToOpenai(json, model) {
 async function* sseJsonObjects(webBody) {
   const reader = webBody.getReader();
   const dec = new TextDecoder();
-  let buf = '';
+  const events = [];
+  const parse = createSSEParser(event => {
+    if (event && event.type !== '[DONE]' && typeof event.data !== 'string') events.push(event);
+  });
   try {
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      buf += dec.decode(value, { stream: true });
-      let idx;
-      while ((idx = buf.indexOf('\n\n')) >= 0) {
-        const raw = buf.slice(0, idx);
-        buf = buf.slice(idx + 2);
-        for (const line of raw.split('\n')) {
-          const l = line.trim();
-          if (!l.startsWith('data:')) continue;
-          const payload = l.slice(5).trim();
-          if (!payload || payload === '[DONE]') continue;
-          try { yield JSON.parse(payload); } catch { /* 忽略非 JSON 行 */ }
-        }
-      }
+      parse(dec.decode(value, { stream: true }));
+      yield* events;
+      events.length = 0;
     }
+    parse(dec.decode(), true);
+    yield* events;
   } finally {
     try { reader.releaseLock(); } catch {}
   }
@@ -228,30 +225,48 @@ function prepareUpstream(provider, key, body, stream) {
   return null;
 }
 
+function sendProviderJson(res, body) {
+  if (res.locals && body.usage) res.locals.gatewayUsage = body.usage;
+  res.json(body);
+}
+
 async function respondOpenai(upstream, res, stream) {
   if (stream) {
     sseStart(res);
-    Readable.fromWeb(upstream.body).pipe(res);
+    const streamBody = Readable.fromWeb(upstream.body);
+    if (res.locals) {
+      const decoder = new StringDecoder('utf8');
+      const parse = createSSEParser(event => {
+        if (event?.usage) res.locals.gatewayUsage = event.usage;
+      });
+      streamBody.on('data', bytes => parse(decoder.write(bytes)));
+      streamBody.on('end', () => parse(decoder.end(), true));
+    }
+    streamBody.pipe(res);
     return;
   }
-  res.json(await upstream.json());
+  sendProviderJson(res, await upstream.json());
 }
 
 async function respondAnthropic(upstream, res, stream, model, id) {
   if (stream) {
     sseStart(res);
     writeSSE(res, chunk(id, model, { role: 'assistant' }));
+    const usage = {};
     for await (const ev of sseJsonObjects(upstream.body)) {
+      if (ev.type === 'message_start') usage.prompt_tokens = ev.message?.usage?.input_tokens;
       if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta' && ev.delta.text) {
         writeSSE(res, chunk(id, model, { content: ev.delta.text }));
       } else if (ev.type === 'message_delta') {
+        usage.completion_tokens = ev.usage?.output_tokens ?? usage.completion_tokens;
         writeSSE(res, chunk(id, model, {}, mapAnthropicStop(ev.delta?.stop_reason)));
       }
     }
+    if (res.locals) res.locals.gatewayUsage = usage;
     res.write('data: [DONE]\n\n'); res.end();
     return;
   }
-  res.json(anthropicToOpenai(await upstream.json(), model));
+  sendProviderJson(res, anthropicToOpenai(await upstream.json(), model));
 }
 
 async function respondGoogle(upstream, res, stream, model, id) {
@@ -259,6 +274,12 @@ async function respondGoogle(upstream, res, stream, model, id) {
     sseStart(res);
     writeSSE(res, chunk(id, model, { role: 'assistant' }));
     for await (const ev of sseJsonObjects(upstream.body)) {
+      if (ev.usageMetadata && res.locals) {
+        res.locals.gatewayUsage = {
+          prompt_tokens: ev.usageMetadata.promptTokenCount,
+          completion_tokens: ev.usageMetadata.candidatesTokenCount,
+        };
+      }
       const text = (ev.candidates || []).flatMap((c) => (c.content?.parts || []).map((p) => p.text || '')).join('');
       if (text) writeSSE(res, chunk(id, model, { content: text }));
       const fr = (ev.candidates?.[0]?.finishReason || '').toLowerCase();
@@ -267,7 +288,7 @@ async function respondGoogle(upstream, res, stream, model, id) {
     res.write('data: [DONE]\n\n'); res.end();
     return;
   }
-  res.json(googleToOpenai(await upstream.json(), model));
+  sendProviderJson(res, googleToOpenai(await upstream.json(), model));
 }
 
 // 换 Key 重试有意义（Key 自身被拒/超额）的状态码

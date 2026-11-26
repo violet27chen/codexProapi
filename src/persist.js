@@ -19,7 +19,8 @@
  *   SUPABASE_TABLE           可选，默认 codex_app_state
  *   CODEX_PERSIST_FLUSH_MS   可选，写后去抖间隔，默认 1200ms
  */
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync, rmSync } from 'fs';
+import { randomUUID } from 'node:crypto';
 import { join, dirname, basename } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -39,7 +40,7 @@ const FLUSH_MS = Math.max(200, Number(process.env.CODEX_PERSIST_FLUSH_MS) || 120
 export const enabled = Boolean(SUPABASE_URL && SUPABASE_KEY);
 
 // 需要持久化的状态文件名（同时也是云端主键 key）
-const PERSISTED = ['accounts.json', 'config.json', 'providers.json', 'usage.json', 'image_usage.json', 'image_exhausted.json'];
+const PERSISTED = ['accounts.json', 'config.json', 'providers.json', 'usage.json', 'gateway_usage.json', 'image_usage.json', 'image_exhausted.json'];
 
 // key -> 本地绝对路径（hydrate 写回时使用）
 function targetPathFor(key) {
@@ -57,6 +58,18 @@ function targetPathFor(key) {
 function ensureDir(p) {
   const dir = dirname(p);
   if (dir && !existsSync(dir)) mkdirSync(dir, { recursive: true });
+}
+
+export function saveJsonState(path, value) {
+  ensureDir(path);
+  const temporary = path + '.' + randomUUID() + '.tmp';
+  try {
+    writeFileSync(temporary, JSON.stringify(value), { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+    renameSync(temporary, path);
+  } finally {
+    rmSync(temporary, { force: true });
+  }
+  queuePush(path);
 }
 
 async function rest(method, { body, prefer, qs } = {}) {

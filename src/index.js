@@ -5,7 +5,9 @@ import express from 'express';
 import { createHmac, timingSafeEqual, randomUUID } from 'node:crypto';
 import { join, dirname, resolve } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
+import { readFileSync } from 'fs';
+import { findApiKey, requiresApiKey, apiKeysRouter } from './apiKeys.js';
+import { gatewayDay, getGatewayUsage, recordGatewayRequest } from './gatewayUsage.js';
 import { loadAuth, createRoundRobinProvider } from './auth.js';
 import {
   handleChatCompletions,
@@ -25,7 +27,7 @@ import {
   setAccountBlocked,
   exportAccounts,
 } from './accounts.js';
-import { hydrateFromCloud, queuePush, initPersistTimers } from './persist.js';
+import { hydrateFromCloud, saveJsonState, initPersistTimers } from './persist.js';
 import {
   listProvidersForApi, addProvider, updateProvider, deleteProvider,
   setProviderEnabled, resolveRouting, listProviderModelIds, listProviders,
@@ -91,14 +93,8 @@ function isAdminAuthenticated(req) {
   return actualBytes.length === expectedBytes.length && timingSafeEqual(actualBytes, expectedBytes);
 }
 function requireAdmin(req, res, next) {
-  if (!isAdminConfigured()) return next(); // 开发模式放行
   if (isAdminAuthenticated(req)) return next();
-  // API 请求返回 401，页面请求让前端弹模态框
-  if (req.path.startsWith('/api/') || req.path.startsWith('/auth/')) {
-    return res.status(401).json({ error: '需要管理员登录' });
-  }
-  // 前端页面自己处理（isAdmin 检查）
-  next();
+  return res.status(401).json({ error: '需要管理员登录' });
 }
 function isRequestSecure(req) {
   const rawProto = String(req.get('x-forwarded-proto') || '').split(',')[0].trim().toLowerCase();
@@ -122,32 +118,32 @@ function loadConfig() {
   try {
     const raw = readFileSync(getConfigPath(), 'utf8');
     const j = JSON.parse(raw);
+    if (j.api_keys !== undefined && !Array.isArray(j.api_keys)) throw new Error('无效的密钥配置');
     return {
-      api_key: typeof j.api_key === 'string' ? j.api_key : '',
+      api_keys: Array.isArray(j.api_keys) ? j.api_keys : [],
+      api_key_required: j.api_key_required === true || (typeof j.api_key === 'string' && Boolean(j.api_key.trim())),
+      has_legacy_api_key: Object.hasOwn(j, 'api_key'),
       default_model: typeof j.default_model === 'string' ? j.default_model : '',
       token_refresh_interval_minutes:
         Number.isFinite(Number(j.token_refresh_interval_minutes))
           ? Math.max(5, Number(j.token_refresh_interval_minutes))
           : 60,
     };
-  } catch {
-    return { api_key: '', default_model: '', token_refresh_interval_minutes: 60 };
+  } catch (err) {
+    if (err.code !== 'ENOENT') throw new Error('无法读取网关配置');
+    return { api_keys: [], api_key_required: false, default_model: '', token_refresh_interval_minutes: 60 };
   }
 }
 function saveConfig(obj) {
-  const p = getConfigPath();
-  const dir = dirname(p);
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  const out = {
-    api_key: obj.api_key ?? '',
+  saveJsonState(getConfigPath(), {
+    api_keys: obj.api_keys,
+    api_key_required: obj.api_key_required,
     default_model: typeof obj.default_model === 'string' ? obj.default_model.trim() : '',
     token_refresh_interval_minutes:
       Number.isFinite(Number(obj.token_refresh_interval_minutes))
         ? Math.max(5, Number(obj.token_refresh_interval_minutes))
         : 60,
-  };
-  writeFileSync(p, JSON.stringify(out, null, 2), 'utf8');
-  queuePush(p);
+  });
 }
 
 function randomLocalPart(len = 10) {
@@ -248,32 +244,14 @@ app.post('/api/admin/logout', (req, res) => {
   res.json({ ok: true });
 });
 
-// ── 保护所有管理路由（/api/* 和 /auth/*） ──
-// 排除公开端点：健康检查、登录相关、对话 API（/v1/*）
-const PUBLIC_API_PATHS = new Set([
-  '/api/admin/status', '/api/admin/login', '/api/admin/logout',
-  '/health', '/v1/models', '/v1/chat/completions', '/v1/responses',
-  '/v1/messages', '/v1/images/generations', '/chat/completions', '/responses',
-]);
-app.use((req, res, next) => {
-  if (!req.path.startsWith('/api/') && !req.path.startsWith('/auth/')) return next();
-  if (PUBLIC_API_PATHS.has(req.path)) return next();
-  return requireAdmin(req, res, next);
-});
+// Admin login routes above remain public. All other management routes require a session when configured.
+app.use(['/api', '/auth'], requireAdmin);
+app.use('/api/api-keys', apiKeysRouter({ loadConfig, saveConfig, isAdminConfigured }));
 
 // 版本号以 package.json 为准，供前端统一显示
 try {
   const pkgPath = join(__dirname, '..', 'package.json');
   const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
-  app.get('/api/config', (req, res) => {
-  const cfg = loadConfig();
-  res.json(cfg);
-});
-app.put('/api/config', (req, res) => {
-  const { api_key } = req.body || {};
-  saveConfig({ ...loadConfig(), api_key: typeof api_key === 'string' ? api_key : '' });
-  res.json({ ok: true });
-});
   app.get('/api/version', (req, res) => res.json({ version: pkg.version || '0.0.1' }));
 } catch {
   app.get('/api/version', (req, res) => res.json({ version: '0.0.1' }));
@@ -309,19 +287,26 @@ app.use((req, res, next) => {
 });
 
 const API_KEY_PATHS = ['/v1/models', '/v1/chat/completions', '/v1/responses', '/v1/messages', '/v1/images/generations', '/chat/completions', '/responses'];
-app.use((req, res, next) => {
-  if (!API_KEY_PATHS.includes(req.path)) return next();
+app.all(API_KEY_PATHS, (req, res, next) => {
   const cfg = loadConfig();
-  if (!cfg.api_key || String(cfg.api_key).trim() === '') return next();
   const authorization = req.headers.authorization;
   const bearerToken = (authorization && String(authorization).startsWith('Bearer '))
     ? String(authorization).slice(7).trim()
     : '';
   const token = bearerToken || (typeof req.headers['x-api-key'] === 'string' ? req.headers['x-api-key'].trim() : '');
-  if (token !== cfg.api_key) {
+  const key = findApiKey(cfg, token);
+  if (!key && requiresApiKey(cfg)) {
     res.status(401).json({ error: 'Invalid or missing API key' });
     return;
   }
+  const day = gatewayDay();
+  res.once('finish', () => {
+    try {
+      recordGatewayRequest(day, key?.id || 'anonymous', res.statusCode >= 200 && res.statusCode < 300, res.locals.gatewayUsage);
+    } catch (error) {
+      console.error('[gateway-usage] 统计写入失败:', error.code || error.name);
+    }
+  });
   next();
 });
 
@@ -643,6 +628,23 @@ app.delete('/api/logs', (req, res) => {
   res.json({ ok: true });
 });
 
+app.get('/api/usage/gateway', (req, res) => {
+  const { period = 'day', key = '', date = period === 'month' ? gatewayDay().slice(0, 7) : gatewayDay() } = req.query;
+  const fullDate = period === 'month' ? date + '-01' : date;
+  const parsed = typeof fullDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(fullDate)
+    ? new Date(fullDate + 'T00:00:00Z') : null;
+  if (!['day', 'month'].includes(period) || typeof date !== 'string' || typeof key !== 'string'
+    || !parsed || Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== fullDate) {
+    return res.status(400).json({ error: '请选择有效的日期和统计周期。' });
+  }
+  try {
+    res.set('Cache-Control', 'no-store').json(getGatewayUsage(period, date, key, loadConfig().api_keys));
+  } catch (error) {
+    console.error('[gateway-usage] 统计读取失败:', error.code || error.name);
+    res.status(500).json({ error: '无法读取网关用量统计。' });
+  }
+});
+
 app.get('/api/usage', async (req, res) => {
   try {
     const auths = loadAccountsForProxy();
@@ -835,7 +837,8 @@ app.put('/api/accounts/:index', (req, res) => {
 
 app.get('/api/settings', (req, res) => {
   try {
-    res.json(loadConfig());
+    const { default_model, token_refresh_interval_minutes } = loadConfig();
+    res.json({ default_model, token_refresh_interval_minutes });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -845,7 +848,7 @@ app.patch('/api/settings', (req, res) => {
   try {
     const current = loadConfig();
     const oldInterval = current.token_refresh_interval_minutes;
-    if (typeof req.body?.api_key === 'string') current.api_key = req.body.api_key;
+    if (Object.hasOwn(req.body || {}, 'api_key')) return res.status(400).json({ error: '请在 API 密钥页面创建客户端 Key。' });
     if (typeof req.body?.default_model === 'string') current.default_model = req.body.default_model.trim();
     if (req.body?.token_refresh_interval_minutes != null) {
       const v = Math.max(5, Number(req.body.token_refresh_interval_minutes) || 60);
@@ -856,7 +859,11 @@ app.patch('/api/settings', (req, res) => {
     if (current.token_refresh_interval_minutes !== oldInterval) {
       startAutoRefresh(current.token_refresh_interval_minutes, refreshAuthProvider);
     }
-    res.json({ ok: true, ...current });
+    res.json({
+      ok: true,
+      default_model: current.default_model,
+      token_refresh_interval_minutes: current.token_refresh_interval_minutes,
+    });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -984,6 +991,7 @@ app.post('/v1/images/generations', async (req, res) => {
         delete item._token;
       }
     }
+    res.locals.gatewayUsage = { images: result.data.length };
     res.json(result);
   } catch (e) {
     console.error('[ImageGen] 错误:', e.message);
@@ -1026,6 +1034,7 @@ function startServer() {
   initialProbe();
   // 启动 Token 自动刷新定时器，刷新完成后重建认证闭包使新 token 生效
   const cfg = loadConfig();
+  if (cfg.has_legacy_api_key) saveConfig(cfg);
   startAutoRefresh(cfg.token_refresh_interval_minutes, refreshAuthProvider);
   const server = app.listen(PORT, '0.0.0.0', () => {
     const mockReq = { get: (h) => (h === 'host' ? `localhost:${PORT}` : undefined), secure: false };
