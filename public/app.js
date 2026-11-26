@@ -506,6 +506,9 @@ print(result.data[0].url)`;
             this.pf.base_url = ps.base_url;
             if (this.pf.index == null && !this.pf.name) this.pf.name = ps.key;
         },
+        providerKeyCount() {
+            return String(this.pf.api_key || '').split(/[,\s;]+/).map((s) => s.trim()).filter(Boolean).length;
+        },
         async fetchProviderModelsLive() {
             if (!this.pf.base_url) { this.toast2('请先填 Base URL', 'error'); return; }
             this.loading.fetchModels = true;

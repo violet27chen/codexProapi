@@ -7,6 +7,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
+import { providerKeys, parseKeys } from './providers.js';
 
 const ANTHROPIC_VERSION = '2023-06-01';
 
@@ -185,126 +186,166 @@ function proxyError(res, status, message) {
   res.status(status).json({ error: { message, type: 'provider_error' } });
 }
 
+// ── 多 Key 轮询（同一提供商填多个 api key 时自动轮换）──
+const rrCursors = new Map();
+
 /**
- * 主入口：转发一次 chat/completions。body.model 已去前缀。
+ * 本次请求的 Key 尝试顺序：从轮询游标当前位开始遍历全部 Key。
+ * 效果：每次请求换一个 Key（round-robin，分摊限额）；若某 Key 报鉴权/限额类错误，可顺着往后重试其它 Key。
+ */
+function orderedKeys(provider) {
+  const keys = providerKeys(provider);
+  if (keys.length <= 1) return keys;
+  const id = provider.id || provider.name || '';
+  const start = (rrCursors.get(id) || 0) % keys.length;
+  rrCursors.set(id, (start + 1) % keys.length);
+  return keys.slice(start).concat(keys.slice(0, start));
+}
+
+/** 按提供商类型构造上游请求（Key 只影响鉴权头） */
+function prepareUpstream(provider, key, body, stream) {
+  if (provider.type === 'openai') {
+    return {
+      url: openaiChatUrl(provider.base_url),
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+      payload: JSON.stringify({ ...body, model: body.model }),
+    };
+  }
+  if (provider.type === 'anthropic') {
+    return {
+      url: anthropicMessagesUrl(provider.base_url),
+      headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': ANTHROPIC_VERSION },
+      payload: JSON.stringify(openaiToAnthropic(body)),
+    };
+  }
+  if (provider.type === 'google') {
+    return {
+      url: googleEndpoint(provider.base_url, body.model, stream),
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+      payload: JSON.stringify(openaiToGoogle(body)),
+    };
+  }
+  return null;
+}
+
+async function respondOpenai(upstream, res, stream) {
+  if (stream) {
+    sseStart(res);
+    Readable.fromWeb(upstream.body).pipe(res);
+    return;
+  }
+  res.json(await upstream.json());
+}
+
+async function respondAnthropic(upstream, res, stream, model, id) {
+  if (stream) {
+    sseStart(res);
+    writeSSE(res, chunk(id, model, { role: 'assistant' }));
+    for await (const ev of sseJsonObjects(upstream.body)) {
+      if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta' && ev.delta.text) {
+        writeSSE(res, chunk(id, model, { content: ev.delta.text }));
+      } else if (ev.type === 'message_delta') {
+        writeSSE(res, chunk(id, model, {}, mapAnthropicStop(ev.delta?.stop_reason)));
+      }
+    }
+    res.write('data: [DONE]\n\n'); res.end();
+    return;
+  }
+  res.json(anthropicToOpenai(await upstream.json(), model));
+}
+
+async function respondGoogle(upstream, res, stream, model, id) {
+  if (stream) {
+    sseStart(res);
+    writeSSE(res, chunk(id, model, { role: 'assistant' }));
+    for await (const ev of sseJsonObjects(upstream.body)) {
+      const text = (ev.candidates || []).flatMap((c) => (c.content?.parts || []).map((p) => p.text || '')).join('');
+      if (text) writeSSE(res, chunk(id, model, { content: text }));
+      const fr = (ev.candidates?.[0]?.finishReason || '').toLowerCase();
+      if (fr) writeSSE(res, chunk(id, model, {}, fr === 'max_tokens' ? 'length' : 'stop'));
+    }
+    res.write('data: [DONE]\n\n'); res.end();
+    return;
+  }
+  res.json(googleToOpenai(await upstream.json(), model));
+}
+
+// 换 Key 重试有意义（Key 自身被拒/超额）的状态码
+const KEY_RETRY_STATUS = new Set([401, 403, 429]);
+
+/**
+ * 主入口：转发一次 chat/completions。body.model 已去前缀；多 Key 时自动轮询并在 Key 级错误时切换重试。
  */
 export async function forwardChatCompletion(provider, body, res) {
   const model = body.model;
   const stream = body.stream === true;
   const id = `chatcmpl-${randomUUID().replace(/-/g, '')}`;
 
-  try {
-    if (provider.type === 'openai') {
-      const url = openaiChatUrl(provider.base_url);
-      const upstream = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${provider.api_key}` },
-        body: JSON.stringify({ ...body, model }),
-      });
-      if (!upstream.ok) {
-        const t = await upstream.text().catch(() => '');
-        return proxyError(res, upstream.status, `上游(openai) ${upstream.status}: ${t.slice(0, 400)}`);
-      }
-      if (stream) {
-        sseStart(res);
-        Readable.fromWeb(upstream.body).pipe(res);
-        return;
-      }
-      const json = await upstream.json();
-      res.json(json);
-      return;
+  const keys = orderedKeys(provider);
+  const attempts = keys.length ? keys : [''];
+
+  for (let i = 0; i < attempts.length; i++) {
+    const req = prepareUpstream(provider, attempts[i], body, stream);
+    if (!req) return proxyError(res, 400, `未知提供商类型：${provider.type}`);
+
+    let upstream;
+    try {
+      upstream = await fetch(req.url, { method: 'POST', headers: req.headers, body: req.payload });
+    } catch (e) {
+      return proxyError(res, 502, `转发失败：${e.message}`);
     }
 
-    if (provider.type === 'anthropic') {
-      const url = anthropicMessagesUrl(provider.base_url);
-      const aBody = openaiToAnthropic({ ...body, model });
-      const upstream = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-api-key': provider.api_key, 'anthropic-version': ANTHROPIC_VERSION },
-        body: JSON.stringify(aBody),
-      });
-      if (!upstream.ok) {
-        const t = await upstream.text().catch(() => '');
-        return proxyError(res, upstream.status, `上游(anthropic) ${upstream.status}: ${t.slice(0, 400)}`);
+    if (upstream.ok) {
+      try {
+        if (provider.type === 'anthropic') return await respondAnthropic(upstream, res, stream, model, id);
+        if (provider.type === 'google') return await respondGoogle(upstream, res, stream, model, id);
+        return await respondOpenai(upstream, res, stream);
+      } catch (e) {
+        return proxyError(res, 502, `转发失败：${e.message}`);
       }
-      if (stream) {
-        sseStart(res);
-        writeSSE(res, chunk(id, model, { role: 'assistant' }));
-        for await (const ev of sseJsonObjects(upstream.body)) {
-          if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta' && ev.delta.text) {
-            writeSSE(res, chunk(id, model, { content: ev.delta.text }));
-          } else if (ev.type === 'message_delta') {
-            const fr = mapAnthropicStop(ev.delta?.stop_reason);
-            writeSSE(res, chunk(id, model, {}, fr));
-          }
-        }
-        res.write('data: [DONE]\n\n'); res.end();
-        return;
-      }
-      const json = await upstream.json();
-      res.json(anthropicToOpenai(json, model));
-      return;
     }
 
-    if (provider.type === 'google') {
-      const url = googleEndpoint(provider.base_url, model, stream);
-      const gBody = openaiToGoogle({ ...body, model });
-      const upstream = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': provider.api_key },
-        body: JSON.stringify(gBody),
-      });
-      if (!upstream.ok) {
-        const t = await upstream.text().catch(() => '');
-        return proxyError(res, upstream.status, `上游(google) ${upstream.status}: ${t.slice(0, 400)}`);
-      }
-      if (stream) {
-        sseStart(res);
-        writeSSE(res, chunk(id, model, { role: 'assistant' }));
-        for await (const ev of sseJsonObjects(upstream.body)) {
-          const text = (ev.candidates || []).flatMap((c) => (c.content?.parts || []).map((p) => p.text || '')).join('');
-          if (text) writeSSE(res, chunk(id, model, { content: text }));
-          const fr = (ev.candidates?.[0]?.finishReason || '').toLowerCase();
-          if (fr) writeSSE(res, chunk(id, model, {}, fr === 'max_tokens' ? 'length' : 'stop'));
-        }
-        res.write('data: [DONE]\n\n'); res.end();
-        return;
-      }
-      const json = await upstream.json();
-      res.json(googleToOpenai(json, model));
-      return;
-    }
-
-    return proxyError(res, 400, `未知提供商类型：${provider.type}`);
-  } catch (e) {
-    return proxyError(res, 502, `转发失败：${e.message}`);
+    const t = await upstream.text().catch(() => '');
+    if (KEY_RETRY_STATUS.has(upstream.status) && i < attempts.length - 1) continue; // 换下一个 Key
+    return proxyError(res, upstream.status, `上游(${provider.type}) ${upstream.status}: ${t.slice(0, 400)}`);
   }
+  return proxyError(res, 502, '转发失败：无可用 Key');
 }
 
 /**
  * 一键获取上游真实模型列表（可用于新增/编辑时，未保存也能测）。返回模型 id 字符串数组。
+ * 填了多个 Key 时逐个试（某个 Key 无权限/超额则换下一个）。
  */
-export async function fetchProviderModels({ type, base_url, api_key } = {}) {
+export async function fetchProviderModels({ type, base_url, api_key, api_keys } = {}) {
   if (!base_url) throw new Error('base_url 不能为空');
   const b = String(base_url).replace(/\/+$/, '');
   let url, headers, parse;
   if (type === 'anthropic') {
     url = `${b.replace(/\/v1$/i, '')}/v1/models`;
-    headers = { 'x-api-key': api_key || '', 'anthropic-version': ANTHROPIC_VERSION };
+    headers = (k) => ({ 'x-api-key': k, 'anthropic-version': ANTHROPIC_VERSION });
     parse = (j) => (j.data || []).map((m) => m.id).filter(Boolean);
   } else if (type === 'google') {
     url = `${b.replace(/\/v1beta$/i, '')}/v1beta/models`;
-    headers = { 'x-goog-api-key': api_key || '' };
+    headers = (k) => ({ 'x-goog-api-key': k });
     parse = (j) => (j.models || []).map((m) => String(m.name || '').replace(/^models\//, '')).filter(Boolean);
   } else {
     url = /\/v1$/i.test(b) ? `${b}/models` : `${b}/v1/models`;
-    headers = { Authorization: `Bearer ${api_key || ''}` };
+    headers = (k) => ({ Authorization: `Bearer ${k}` });
     parse = (j) => (j.data || []).map((m) => m.id).filter(Boolean);
   }
-  const res = await fetch(url, { headers });
-  const text = await res.text();
-  if (!res.ok) throw new Error(`HTTP ${res.status}: ${text.slice(0, 200)}`);
-  let json;
-  try { json = text ? JSON.parse(text) : {}; } catch { throw new Error('上游返回非 JSON'); }
-  return parse(json);
+  const keys = parseKeys({ api_keys, api_key });
+  const attempts = keys.length ? keys : [''];
+  let lastErr = null;
+  for (let i = 0; i < attempts.length; i++) {
+    const res = await fetch(url, { headers: headers(attempts[i]) });
+    const text = await res.text();
+    if (res.ok) {
+      let json;
+      try { json = text ? JSON.parse(text) : {}; } catch { throw new Error('上游返回非 JSON'); }
+      return parse(json);
+    }
+    lastErr = new Error(`HTTP ${res.status}: ${text.slice(0, 200)}`);
+    if (!KEY_RETRY_STATUS.has(res.status) || i === attempts.length - 1) break; // 非 Key 问题或已试完
+  }
+  throw lastErr || new Error('获取失败');
 }

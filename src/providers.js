@@ -6,8 +6,9 @@
  * 提供商的 base_url + api_key 直接透传/翻译，聚合到一个入口，免去频繁切换。
  *
  * 存储：providers.json（与 accounts.json 同目录，纳入 Supabase 持久化）。
- * 结构：[{ id, name, type, base_url, api_key, models:[], enabled, created_at }]
+ * 结构：[{ id, name, type, base_url, api_keys:[], api_key, models:[], enabled, created_at }]
  *   type: 'openai' | 'anthropic' | 'google'
+ *   api_keys: 支持多个 Key（自动轮询分摊限额）；api_key 恒等于第一个，兼容旧数据与旧读取方。
  */
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
@@ -78,28 +79,50 @@ function sanitize(input = {}, existing = []) {
   const type = TYPES.has(input.type) ? input.type : 'openai';
   const base_url = String(input.base_url || '').trim().replace(/\/+$/, '');
   if (!/^https?:\/\//i.test(base_url)) throw new Error('base_url 需以 http(s):// 开头');
-  const api_key = String(input.api_key || '').trim();
+  const api_keys = parseKeys(input);
   const models = Array.isArray(input.models)
     ? input.models.map((m) => String(m).trim()).filter(Boolean)
     : [];
   const enabled = input.enabled !== false;
-  return { name, type, base_url, api_key, models, enabled };
+  return { name, type, base_url, api_keys, api_key: api_keys[0] || '', models, enabled };
+}
+
+/** 把输入里的 Key 解析成去重列表：支持 api_keys 数组，或 api_key 字符串（换行/逗号/空格/分号分隔＝多个） */
+export function parseKeys(input = {}) {
+  const raw = Array.isArray(input.api_keys)
+    ? input.api_keys.join('\n')
+    : String(input.api_key || '');
+  return [...new Set(raw.split(/[,\s;]+/).map((s) => s.trim()).filter(Boolean))];
+}
+
+/** 读取某个提供商的全部 Key（向后兼容只有 api_key 的旧数据） */
+export function providerKeys(p = {}) {
+  const arr = Array.isArray(p.api_keys)
+    ? p.api_keys.map((s) => String(s).trim()).filter(Boolean)
+    : [];
+  if (arr.length) return [...new Set(arr)];
+  const one = String(p.api_key || '').trim();
+  return one ? [one] : [];
 }
 
 /** 列表（脱敏：api_key 只留末 4 位） */
 export function listProvidersForApi() {
-  return loadRaw().map((p, index) => ({
-    index,
-    id: p.id,
-    name: p.name,
-    type: p.type || 'openai',
-    base_url: p.base_url || '',
-    keyMask: p.api_key ? `••••${String(p.api_key).slice(-4)}` : '',
-    hasKey: !!p.api_key,
-    models: Array.isArray(p.models) ? p.models : [],
-    enabled: p.enabled !== false,
-    created_at: p.created_at || null,
-  }));
+  return loadRaw().map((p, index) => {
+    const keys = providerKeys(p);
+    return {
+      index,
+      id: p.id,
+      name: p.name,
+      type: p.type || 'openai',
+      base_url: p.base_url || '',
+      keyMask: keys.length ? `••••${String(keys[0]).slice(-4)}` : '',
+      keyCount: keys.length,
+      hasKey: keys.length > 0,
+      models: Array.isArray(p.models) ? p.models : [],
+      enabled: p.enabled !== false,
+      created_at: p.created_at || null,
+    };
+  });
 }
 
 /** 原始列表（含 key，仅服务端内部使用） */
@@ -122,12 +145,14 @@ export function updateProvider(index, changes = {}) {
   const i = Number(index);
   if (!Number.isInteger(i) || i < 0 || i >= list.length) throw new Error('未找到指定提供商');
   const cur = list[i];
-  // 若改了 name/type/base_url 走完整校验；api_key 留空表示保持原值
+  // 若改了 name/type/base_url 走完整校验；Key 留空表示保持原值（可一次替换为多个）
+  const keyInput = changes.api_keys !== undefined ? { api_keys: changes.api_keys } : { api_key: changes.api_key };
+  const parsedKeys = parseKeys(keyInput);
   const merged = {
     name: changes.name !== undefined ? changes.name : cur.name,
     type: changes.type !== undefined ? changes.type : cur.type,
     base_url: changes.base_url !== undefined ? changes.base_url : cur.base_url,
-    api_key: changes.api_key !== undefined && String(changes.api_key).trim() !== '' ? changes.api_key : cur.api_key,
+    api_keys: parsedKeys.length ? parsedKeys : providerKeys(cur),
     models: changes.models !== undefined ? changes.models : cur.models,
     enabled: changes.enabled !== undefined ? changes.enabled : cur.enabled,
   };

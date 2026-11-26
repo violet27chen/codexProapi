@@ -13,6 +13,10 @@ npm-debug.log*
 # 本地数据（账号、用量等勿提交）
 data/
 
+# 本机截获的 refresh token（凭据，严禁提交）
+captured-rt.txt
+scripts/captured-rt.txt
+
 # 构建产物（本地/CI 构建，勿提交）
 dist/
 release/

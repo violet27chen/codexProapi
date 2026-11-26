@@ -340,7 +340,7 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
       <div class="content" x-show="page==='providers'" x-cloak>
         <div class="card mb-3">
           <div class="card-title">聚合多个上游 API Key</div>
-          <p class="text-muted text-sm">把其它提供商（OpenAI 兼容 / Anthropic / Google）聚合到同一个入口，客户端只需切换模型、不必换 Base URL/Key。用法：模型名写成 <span class="mono">提供商名/模型id</span>（如 <span class="mono">deepseek/deepseek-chat</span>）。<b>不带前缀</b>的模型仍走内置 Codex 账号。</p>
+          <p class="text-muted text-sm">把其它提供商（OpenAI 兼容 / Anthropic / Google）聚合到同一个入口，客户端只需切换模型、不必换 Base URL/Key。用法：模型名写成 <span class="mono">提供商名/模型id</span>（如 <span class="mono">deepseek/deepseek-chat</span>）。<b>不带前缀</b>的模型仍走内置 Codex 账号。同一提供商可填<b>多个 API Key（每行一个）</b>，网关自动轮询、并在某个 Key 被拒或超额时换下一个。</p>
         </div>
         <div class="card">
           <div class="table-wrap">
@@ -353,11 +353,11 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
                     <td class="mono" x-text="p.name"></td>
                     <td><span class="badge badge-info" x-text="p.type"></span></td>
                     <td class="mono text-xs" x-text="p.base_url"></td>
-                    <td class="mono text-xs" x-text="p.keyMask"></td>
+                    <td class="mono text-xs" x-text="p.keyMask + (p.keyCount>1 ? ' ×'+p.keyCount : '')"></td>
                     <td class="text-muted text-xs" x-text="p.models.length ? p.models.join(', ') : '（未声明，用 名称/模型id 直接调）'"></td>
                     <td>
                       <span class="badge" :class="p.enabled?'badge-ok':'badge-err'" x-text="p.enabled?'启用':'停用'"></span>
-                      <span x-show="p._test" class="text-xs" :class="p._test.ok?'text-ok':'text-err'" x-text="p._test.ok?('✔ '+p._test.sample):('✖ '+(p._test.error||p._test.sample||'失败'))"></span>
+                      <span x-show="p._test" class="text-xs" :class="p._test && p._test.ok?'text-ok':'text-err'" x-text="p._test && p._test.ok?('✔ '+p._test.sample):('✖ '+((p._test && (p._test.error||p._test.sample))||'失败'))"></span>
                     </td>
                     <td>
                       <button type="button" class="btn btn-sm" @click="testProvider(p.index)" :class="{'btn-loading':loading['providerTest'+p.index]}">测试</button>
@@ -696,8 +696,9 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
         <input type="text" class="mono" x-model="pf.base_url">
       </div>
       <div class="form-row">
-        <label class="form-label" x-text="pf.index==null ? 'API Key' : 'API Key（留空保持原值）'"></label>
-        <input type="text" class="mono" x-model="pf.api_key">
+        <label class="form-label" x-text="pf.index==null ? 'API Key（可多个，每行一个）' : 'API Key（可多个，每行一个；留空保持原值）'"></label>
+        <textarea class="mono" rows="3" x-model="pf.api_key"></textarea>
+        <div class="text-muted text-xs" x-show="providerKeyCount()>1" x-text="'已填 '+providerKeyCount()+' 个 Key：请求自动轮询分摊限额，某个 Key 被拒/超额时自动换下一个'"></div>
       </div>
       <div class="form-row">
         <label class="form-label">模型列表（逗号或换行分隔，可留空）</label>

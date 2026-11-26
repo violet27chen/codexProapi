@@ -57,6 +57,8 @@ test('providers: 别名映射 显示名=真实id（两段调用，转发成真�
   assert.equal(m.resolveRouting('cantrustai/some-other').model, 'some-other');
   rmSync(dir, { recursive: true, force: true });
 });
+
+test('providers: 最长前缀匹配优先于短前缀', async () => {
   const { m, dir } = await freshProviders();
   m.addProvider({ name: 'open', type: 'openai', base_url: 'https://a.com/v1', api_key: 'k' });
   m.addProvider({ name: 'openrouter', type: 'openai', base_url: 'https://openrouter.ai/api/v1', api_key: 'k' });
@@ -73,5 +75,33 @@ test('providers: 别名映射 显示名=真实id（两段调用，转发成真�
   assert.equal(r.model, 'meta-llama/Llama-3');
   // 未知前缀 -> null
   assert.equal(m.resolveRouting('unknown/model'), null);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test('providers: 多个 Key（换行/逗号分隔）→ api_keys + keyCount + 留空保持原值', async () => {
+  const { m, dir } = await freshProviders();
+  m.addProvider({ name: 'gw', type: 'openai', base_url: 'https://a.com/v1', api_key: 'sk-AAA1111\nsk-BBB2222, sk-CCC3333' });
+  const raw = m.listProviders()[0];
+  assert.deepEqual(raw.api_keys, ['sk-AAA1111', 'sk-BBB2222', 'sk-CCC3333']);
+  assert.equal(raw.api_key, 'sk-AAA1111', 'api_key 恒等于第一个，兼容旧读取方');
+
+  const shown = m.listProvidersForApi()[0];
+  assert.equal(shown.keyCount, 3);
+  assert.ok(shown.keyMask.endsWith('1111'));
+  assert.ok(!JSON.stringify(m.listProvidersForApi()).includes('sk-BBB2222'), '列表不应泄露完整 key');
+
+  // 留空保持原值（仍是 3 个）
+  m.updateProvider(0, { api_key: '' });
+  assert.equal(m.listProviders()[0].api_keys.length, 3);
+  // 一次替换成多个（空格分隔也算）
+  m.updateProvider(0, { api_key: 'sk-DDD4444 sk-EEE5555' });
+  assert.deepEqual(m.listProviders()[0].api_keys, ['sk-DDD4444', 'sk-EEE5555']);
+  // 去重
+  m.updateProvider(0, { api_key: 'sk-SAME,sk-SAME' });
+  assert.deepEqual(m.listProviders()[0].api_keys, ['sk-SAME']);
+
+  // 旧数据（只有 api_key）向后兼容
+  assert.deepEqual(m.providerKeys({ api_key: 'legacy-1' }), ['legacy-1']);
+  assert.deepEqual(m.providerKeys({}), []);
   rmSync(dir, { recursive: true, force: true });
 });
