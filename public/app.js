@@ -65,7 +65,7 @@ function app() {
         endpoints: [
             { m: 'POST', path: '/v1/chat/completions', desc: '对话补全' },
             { m: 'POST', path: '/v1/responses', desc: 'OpenAI Responses API' },
-            { m: 'POST', path: '/v1/messages', desc: 'Claude Messages 格式兼容（OpenAI 格式响应）' },
+            { m: 'POST', path: '/v1/messages', desc: 'Claude 请求，OpenAI 响应' },
             { m: 'GET',  path: '/v1/models',            desc: '模型列表' },
             { m: 'GET',  path: '/health',               desc: '健康检查' },
             { m: 'POST', path: '/api/accounts/batch-import', desc: '批量导入账号' },
@@ -81,13 +81,13 @@ function app() {
             return this.lf === 'all' ? this.logs : this.logs.filter(l => l.level === this.lf);
         },
         get availableModelsCount() {
-            return this.models.filter(m => m.available === true).length;
+            return this.models.filter(model => this.modelAvailability(model) === true).length;
         },
         get unavailableModelsCount() {
-            return this.models.filter(m => m.available === false).length;
+            return this.models.filter(model => this.modelAvailability(model) === false).length;
         },
         get unknownModelsCount() {
-            return this.models.filter(m => m.available == null).length;
+            return this.models.filter(model => this.modelAvailability(model) == null).length;
         },
         get selectableModels() {
             return this.models.filter(m => m.type === 'text' && m.available !== false);
@@ -147,7 +147,7 @@ function app() {
             try { return location.origin.replace(/\/+$/, ''); } catch { return ''; }
         },
         get curlExample() {
-            const model = this.cfg.default_model || this.selectableModels[0]?.id || '自动获取的模型 ID';
+            const model = this.cfg.default_model || this.selectableModels[0]?.id || '<MODEL>';
             const body = { model, messages: [{ role: 'user', content: '你好' }], stream: false };
             return `curl -sS ${this.baseUrl}/v1/chat/completions \\
   -H "Content-Type: application/json" \\
@@ -155,7 +155,7 @@ function app() {
   -d '${JSON.stringify(body)}'`;
         },
         get claudeCurlExample() {
-            const model = this.cfg.default_model || this.selectableModels[0]?.id || '自动获取的模型 ID';
+            const model = this.cfg.default_model || this.selectableModels[0]?.id || '<MODEL>';
             const body = {
                 model,
                 max_tokens: 1024,
@@ -169,7 +169,7 @@ function app() {
   -d '${JSON.stringify(body)}'`;
         },
         get responsesCurlExample() {
-            const model = this.cfg.default_model || this.selectableModels[0]?.id || '自动获取的模型 ID';
+            const model = this.cfg.default_model || this.selectableModels[0]?.id || '<MODEL>';
             const body = { model, input: '你好', stream: false };
             return `curl -sS ${this.baseUrl}/v1/responses \\
   -H "Content-Type: application/json" \\
@@ -455,7 +455,6 @@ print(result.data[0].url)`;
             if (this.loading.models) return;
             this.loading.models = true;
             this.modelsInProgress = true;
-            if (showToast) this.toast2('正在获取模型目录并探测可用性…', 'info');
             try {
                 const r = await fetch('/api/models/refresh', { method: 'POST' });
                 const d = await r.json();
@@ -536,7 +535,7 @@ print(result.data[0].url)`;
             try {
                 const response = await fetch('/api/api-keys');
                 const data = await response.json();
-                if (!response.ok) throw new Error(data.error || '读取 API Key 失败');
+                if (!response.ok) throw new Error(data.error || '读取密钥失败');
                 this.apiKeys = data.keys;
                 this.apiKeyRequired = data.required;
             } catch (error) {
@@ -571,7 +570,7 @@ print(result.data[0].url)`;
                     }),
                 });
                 const data = await response.json();
-                if (!response.ok) throw new Error(data.error || '创建 API Key 失败');
+                if (!response.ok) throw new Error(data.error || '创建密钥失败');
                 this.newApiKey = data.token;
                 this.apiKeys = [data.key, ...this.apiKeys];
                 this.apiKeyRequired = true;
@@ -587,9 +586,9 @@ print(result.data[0].url)`;
             this.revokingApiKey = key.id;
             try {
                 const response = await fetch('/api/api-keys/' + encodeURIComponent(key.id), { method: 'DELETE' });
-                if (!response.ok) throw new Error((await response.json()).error || '撤销 API Key 失败');
+                if (!response.ok) throw new Error((await response.json()).error || '撤销密钥失败');
                 await this.loadApiKeys();
-                this.toast2('API Key 已撤销', 'success');
+                this.toast2('密钥已撤销', 'success');
             } catch (error) {
                 this.toast2(error.message, 'error');
             } finally {
@@ -666,9 +665,6 @@ print(result.data[0].url)`;
             this.pf.base_url = ps.base_url;
             if (this.pf.index == null && !this.pf.name) this.pf.name = ps.key;
         },
-        providerKeyCount() {
-            return String(this.pf.api_key || '').split(/[,\s;]+/).map((s) => s.trim()).filter(Boolean).length;
-        },
         async fetchProviderModelsLive() {
             if (!this.pf.base_url) { this.toast2('请先填 Base URL', 'error'); return; }
             this.loading.fetchModels = true;
@@ -680,7 +676,7 @@ print(result.data[0].url)`;
                 if (!d.ok) {
                     const notFound = /404|not found/i.test(d.error || '');
                     this.toast2(notFound
-                        ? '该上游未提供模型列表，可手动填写模型，或留空直接用 名称/模型id 调用'
+                        ? '上游未提供模型列表，请手动填写'
                         : ('获取失败：' + (d.error || '')), notFound ? 'info' : 'error');
                     return;
                 }
@@ -757,7 +753,7 @@ print(result.data[0].url)`;
                     if (!this.af.authJson.trim()) { this.toast2('请粘贴 auth.json 内容', 'error'); return; }
                     body = { name: this.af.name || undefined, authJson: this.af.authJson, proxy: this.af.proxy || undefined };
                 } else {
-                    if (!this.af.access_token || !this.af.account_id) { this.toast2('请填写 Token 和 Account ID', 'error'); return; }
+                    if (!this.af.access_token || !this.af.account_id) { this.toast2('请填写 Access Token 和 Account ID', 'error'); return; }
                     body = { name: this.af.name || undefined, access_token: this.af.access_token, account_id: this.af.account_id, refresh_token: this.af.refresh_token || undefined, proxy: this.af.proxy || undefined };
                 }
                 const editing = this.accountEditIndex !== null;
@@ -813,7 +809,6 @@ print(result.data[0].url)`;
         },
         async checkAccountsHealth() {
             this.loading.health = true;
-            this.toast2('检查中，需 5-15 秒…', 'info');
             try {
                 const r = await fetch('/api/accounts/health');
                 const d = await r.json();
@@ -998,28 +993,33 @@ print(result.data[0].url)`;
                 : '重置 ' + date.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
         },
         modelStatusLabel(model) {
-            if (this.modelQuotaIsEmpty(model.id)) return '不可用';
-            if (model.available === true) return '可用';
-            if (model.available === false) return '不可用';
+            const available = this.modelAvailability(model);
+            if (available === true) return '可用';
+            if (available === false) return '不可用';
             return this.modelsInProgress ? '探测中' : '待确认';
         },
         modelStatusClass(model) {
-            if (this.modelQuotaIsEmpty(model.id) || model.available === false) return 'badge-err';
-            if (model.available === true) return 'badge-ok';
+            const available = this.modelAvailability(model);
+            if (available === false) return 'badge-err';
+            if (available === true) return 'badge-ok';
             return 'badge-gray';
         },
-        modelQuotaIsEmpty(modelId) {
+        modelAvailability(model) {
+            return this.modelQuotaIsEmpty(model) ? false : model.available;
+        },
+        modelQuotaIsEmpty(model) {
+            if (model.source === 'provider') return false;
             const quotaEntries = [];
             for (const usage of this.usageData) {
                 for (const quota of usage.model_quotas || []) {
-                    if (quota.model === modelId) quotaEntries.push(quota);
+                    if (quota.model === model.id) quotaEntries.push(quota);
                 }
             }
             return quotaEntries.length > 0
                 && quotaEntries.every((quota) => Number(quota.remaining_pct) <= 0);
         },
         modelReasonLabel(reason, model) {
-            if (model && this.modelQuotaIsEmpty(model.id)) return '模型额度已用尽';
+            if (model && this.modelQuotaIsEmpty(model)) return '模型配额已用尽';
             const labels = {
                 model_not_found: '模型不存在或不支持',
                 model_empty_response: '模型无返回内容',
@@ -1030,9 +1030,9 @@ print(result.data[0].url)`;
                 no_healthy_account: '没有可用账号',
                 not_probed: '尚未探测',
                 provider_rate_limited: '上游限流或额度不足',
-                provider_catalog_only: '目录发现，声明后可探测',
-                provider_catalog_unsupported: '上游未提供模型目录，请手动声明模型',
-                provider_catalog_empty: '上游未返回模型，请手动声明模型',
+                provider_catalog_only: '声明后可探测',
+                provider_catalog_unsupported: '无模型目录，需手动声明',
+                provider_catalog_empty: '模型目录为空',
             };
             return reason ? (labels[reason] || reason) : '—';
         },

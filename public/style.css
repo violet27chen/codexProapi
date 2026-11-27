@@ -106,11 +106,7 @@ body {
   color: var(--text);
   margin-bottom: 4px;
 }
-.modal-desc {
-  font-size: 0.85rem;
-  color: var(--text-muted);
-  margin-bottom: 20px;
-}
+.modal-box > .modal-title { margin-bottom: 16px; }
 
 /* ── Main Content Area ── */
 .main-area {
@@ -188,8 +184,6 @@ body {
 .text-action { font: inherit; font-size: 13px; color: var(--primary); background: transparent; border: 0; cursor: pointer; padding: 4px 2px; }
 .text-action:hover { text-decoration: underline; }
 .example-panel select { width: auto; max-width: 100%; font: 12px var(--mono); padding: 7px; }
-.example-auth-note { margin-bottom: 10px; }
-.example-auth-note .text-action { font-size: inherit; padding-block: 0; }
 .key-status { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .key-panel .table-wrap { overflow-wrap: anywhere; }
 .usage-filters { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; }
@@ -344,25 +338,6 @@ tbody tr:hover td {
   background: var(--surface);
   color: var(--text);
   box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-}
-.oauth-login-panel {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 16px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: #F8F8FA;
-}
-.oauth-login-title {
-  font-weight: 700;
-  color: var(--text);
-}
-.oauth-login-desc {
-  color: var(--text-muted);
-  font-size: 0.82rem;
-  line-height: 1.6;
 }
 
 /* ── Chips / Badges ── */

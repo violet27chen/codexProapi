@@ -104,10 +104,10 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
             </button>
             <button type="button" class="btn" @click="startLocalCodexLogin()" :disabled="loading.localCodexLogin" :class="{'btn-loading':loading.localCodexLogin}">
               <svg x-show="loading.localCodexLogin" class="spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.22-8.56"/></svg>
-              本机 Codex 登录并添加
+              本机登录 Codex
             </button>
             <button type="button" class="btn" @click="showBatchImport=true; batchImportText=''; batchImportResults=null">批量导入</button>
-            <button type="button" class="btn" @click="$refs.importFileInput.click()" :class="{'btn-loading':loading.importAccountsFile}">导入账号文件</button>
+            <button type="button" class="btn" @click="$refs.importFileInput.click()" :class="{'btn-loading':loading.importAccountsFile}">导入 TXT</button>
             <input type="file" accept=".txt,text/plain" x-ref="importFileInput" @change="importAccountsFile($event)" style="display:none">
             <button type="button" class="btn" @click="exportAccounts()" :class="{'btn-loading':loading.exportAccounts}">导出账号</button>
             <button type="button" class="btn btn-primary" @click="showAdd=true; resetAddForm()">+ 添加账号</button>
@@ -138,21 +138,21 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
       <div class="content dashboard" x-show="page==='dashboard'">
         <div class="stats-grid">
           <button type="button" class="stat-card metric-link" @click="navigate('accounts')">
-            <span class="stat-label">账号总数<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 20v-2a4 4 0 014-4h5a4 4 0 014 4v2 M9.5 3a4 4 0 100 8 4 4 0 000-8 M17 5a3 3 0 010 6m1 4a4 4 0 013 4"/></svg></span>
+            <span class="stat-label">Codex 账号<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 20v-2a4 4 0 014-4h5a4 4 0 014 4v2 M9.5 3a4 4 0 100 8 4 4 0 000-8 M17 5a3 3 0 010 6m1 4a4 4 0 013 4"/></svg></span>
             <span class="stat-value" x-text="accounts.length"></span>
-            <span class="stat-sub">已配置</span></button>
+          </button>
           <button type="button" class="stat-card metric-link" @click="navigate('logs')">
-            <span class="stat-label">今日请求<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M2 12h4l3-8 5 16 3-8h5"/></svg></span>
+            <span class="stat-label">今日请求记录<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M2 12h4l3-8 5 16 3-8h5"/></svg></span>
             <span class="stat-value" x-text="todayReqs"></span>
-            <span class="stat-sub">日志内记录</span></button>
+          </button>
           <button type="button" class="stat-card metric-link" @click="navigate('usage')">
-            <span class="stat-label">Token 用量<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 5h14v14H5z M9 2v3m6-3v3M9 19v3m6-3v3M2 9h3m-3 6h3m14-6h3m-3 6h3 M9 9h6v6H9z"/></svg></span>
+            <span class="stat-label">Codex 累计 Token<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 5h14v14H5z M9 2v3m6-3v3M9 19v3m6-3v3M2 9h3m-3 6h3m14-6h3m-3 6h3 M9 9h6v6H9z"/></svg></span>
             <span class="stat-value" x-text="formatTok(totalTokens)"></span>
-            <span class="stat-sub">累计</span></button>
+          </button>
           <button type="button" class="stat-card metric-link" @click="navigate('models')">
             <span class="stat-label">可用模型<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M2 7l10-5 10 5-10 5z M2 12l10 5 10-5M2 17l10 5 10-5"/></svg></span>
             <span class="stat-value" x-text="availableModelsCount"></span>
-            <span class="stat-sub" x-text="models.length ? '/ ' + models.length + ' 个' : '未探测'"></span></button>
+          </button>
         </div>
 
         <div class="overview-grid">
@@ -216,7 +216,6 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
                 <template x-if="imageModelsAvailable"><option value="images">图片生成</option></template>
               </select>
             </div>
-            <p class="text-muted text-xs example-auth-note">启用 API 鉴权时，使用在 <button type="button" class="text-action" @click="navigate('apiKeys')">API 密钥</button> 页面创建的 Key 替换 <code class="mono">&lt;API_KEY&gt;</code>。</p>
             <div class="code-toolbar">
               <div class="language-switch" aria-label="示例语言" role="group">
                 <button type="button" :aria-pressed="exampleLang==='curl'" @click="exampleLang='curl'">curl</button>
@@ -263,7 +262,7 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
                 </tr>
               </thead>
               <tbody>
-                <tr x-show="accounts.length===0"><td colspan="7" class="empty">暂无账号，可通过「添加账号」或「导入账号文件」接入</td></tr>
+                <tr x-show="accounts.length===0"><td colspan="7" class="empty">暂无 Codex 账号</td></tr>
                 <template x-for="(acc, idx) in accounts" :key="idx">
                   <tr>
                     <td class="text-muted" x-text="acc.index+1"></td>
@@ -314,17 +313,17 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
             <div class="stat-value" x-text="unavailableModelsCount"></div>
           </div>
           <div class="stat-card">
-            <div class="stat-label">探测中/未知</div>
+            <div class="stat-label">待确认模型</div>
             <div class="stat-value" x-text="unknownModelsCount"></div>
           </div>
         </div>
-        <div class="text-muted text-xs mb-2" x-show="modelsInProgress || loading.models">正在实时探测模型可用性…</div>
+        <p class="text-muted text-sm" x-show="modelsInProgress" role="status">正在探测模型…</p>
         <div class="card">
           <div class="table-wrap">
             <table>
-              <thead><tr><th>模型 ID</th><th>来源</th><th>状态</th><th>探测通过 / 已探测账号</th><th>延迟</th><th>原因</th></tr></thead>
+              <thead><tr><th>模型 ID</th><th>来源</th><th>状态</th><th>通过 / 已测账号</th><th>延迟</th><th>说明</th></tr></thead>
               <tbody>
-                <tr x-show="models.length===0"><td colspan="6" class="empty">添加 Codex 账号或启用提供商后，点击「刷新探测」。</td></tr>
+                <tr x-show="models.length===0"><td colspan="6" class="empty">暂无模型</td></tr>
                 <template x-for="m in models" :key="m.source === 'provider' ? 'provider-' + m.id : 'codex-' + m.id">
                   <tr>
                     <td class="mono" x-text="m.id"></td>
@@ -347,23 +346,19 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
 
       <!-- ════ PROVIDERS ════ -->
       <div class="content" x-show="page==='providers'" x-cloak>
-        <div class="card mb-3">
-          <div class="card-title">聚合多个上游 API Key</div>
-          <p class="text-muted text-sm">把其它提供商（OpenAI 兼容 / Anthropic / Google）聚合到同一个入口，客户端只需切换模型、不必换 Base URL/Key。用法：模型名写成 <span class="mono">提供商名/模型id</span>（如 <span class="mono">deepseek/deepseek-chat</span>）。<b>不带前缀</b>的模型仍走内置 Codex 账号。同一提供商可填<b>多个 API Key（每行一个）</b>，网关自动轮询、并在某个 Key 被拒或超额时换下一个。</p>
-        </div>
         <div class="card">
           <div class="table-wrap">
             <table>
-              <thead><tr><th>名称(前缀)</th><th>类型</th><th>Base URL</th><th>Key</th><th>模型</th><th>状态</th><th>操作</th></tr></thead>
+              <thead><tr><th>模型前缀</th><th>类型</th><th>Base URL</th><th>上游密钥</th><th>已声明模型</th><th>状态</th><th>操作</th></tr></thead>
               <tbody>
-                <tr x-show="providers.length===0"><td colspan="7" class="empty">暂无上游提供商，点击「添加提供商」接入</td></tr>
+                <tr x-show="providers.length===0"><td colspan="7" class="empty">暂无上游提供商</td></tr>
                 <template x-for="(p, idx) in providers" :key="p.id">
                   <tr>
                     <td class="mono" x-text="p.name"></td>
                     <td><span class="badge badge-info" x-text="p.type"></span></td>
                     <td class="mono text-xs" x-text="p.base_url"></td>
                     <td class="mono text-xs" x-text="p.keyMask + (p.keyCount>1 ? ' ×'+p.keyCount : '')"></td>
-                    <td class="text-muted text-xs" x-text="p.models.length ? p.models.join(', ') : '（未声明，用 名称/模型id 直接调）'"></td>
+                    <td class="text-muted text-xs" x-text="p.models.length ? p.models.join(', ') : '未声明'"></td>
                     <td>
                       <span class="badge" :class="p.enabled?'badge-ok':'badge-err'" x-text="p.enabled?'启用':'停用'"></span>
                       <span x-show="p._test" class="text-xs" :class="p._test && p._test.ok?'text-ok':'text-err'" x-text="p._test && p._test.ok?('✔ '+p._test.sample):('✖ '+((p._test && (p._test.error||p._test.sample))||'失败'))"></span>
@@ -395,10 +390,10 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
                 <option value="day">按日</option><option value="month">按月</option>
               </select>
             </label>
-            <label class="form-label"><span x-text="gatewayPeriod==='month' ? '月份' : '日期'"></span>
+            <label class="form-label"><span x-text="gatewayPeriod==='month' ? '月份（北京时间）' : '日期（北京时间）'"></span>
               <input :type="gatewayPeriod==='month' ? 'month' : 'date'" x-model="gatewayDate" @change="loadGatewayUsage()">
             </label>
-            <label class="form-label">API Key
+            <label class="form-label">客户端密钥
               <select x-model="gatewayKey" @change="loadGatewayUsage()">
                 <option value="">全部密钥</option>
                 <template x-for="key in gatewayUsage?.keys || []" :key="key.id">
@@ -407,7 +402,7 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
               </select>
             </label>
           </div>
-          <p class="text-muted text-xs">按北京时间归档。Token 为网关可获取的计量值，Codex 调用使用估算值。</p>
+          <p class="text-muted text-sm">仅统计已记录的 Token，Codex 用量为估算值。</p>
           <p class="text-muted text-sm mt-2" role="status" x-show="gatewayUsageLoading">正在读取用量…</p>
           <p class="text-err text-sm mt-2" role="alert" x-show="gatewayUsageError" x-text="gatewayUsageError"></p>
           <div class="mt-3" x-show="gatewayUsage && !gatewayUsageLoading && !gatewayUsageError">
@@ -422,9 +417,9 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
             </div>
             <div class="table-wrap">
               <table>
-                <thead><tr><th>日期</th><th>API Key</th><th>请求</th><th>HTTP 成功</th><th>输入 Token</th><th>输出 Token</th><th>图片</th></tr></thead>
+                <thead><tr><th>日期</th><th>客户端密钥</th><th>请求</th><th>HTTP 成功</th><th>输入 Token</th><th>输出 Token</th><th>图片</th></tr></thead>
                 <tbody>
-                  <tr x-show="!gatewayUsage?.rows.length"><td class="empty" colspan="7">此筛选条件下暂无用量记录</td></tr>
+                  <tr x-show="!gatewayUsage?.rows.length"><td class="empty" colspan="7">暂无用量记录</td></tr>
                   <template x-for="row in gatewayUsage?.rows || []" :key="row.day + row.key_id">
                     <tr>
                       <td class="mono" x-text="row.day"></td><td x-text="row.key_name"></td>
@@ -439,10 +434,10 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
           </div>
         </section>
         <div class="card">
-          <h2 class="card-title">上游账号配额</h2>
+          <h2 class="card-title">Codex 账号配额</h2>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>账号</th><th>本地 Token 用量</th><th>5 小时剩余</th><th>周剩余</th><th>月剩余</th></tr></thead>
+              <thead><tr><th>账号</th><th>本地累计 Token</th><th>5 小时剩余</th><th>周剩余</th><th>月剩余</th></tr></thead>
               <tbody>
                 <tr x-show="usageData.length===0"><td colspan="5" class="empty">暂无数据</td></tr>
                 <template x-for="(u, idx) in usageData" :key="idx">
@@ -476,7 +471,7 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
         </div>
         <div class="card mt-3">
           <details>
-            <summary class="card-title" style="cursor:pointer">模型额度</summary>
+            <summary class="card-title" style="cursor:pointer">Codex 模型配额</summary>
           <div class="text-muted text-xs mb-2 mt-2" x-show="!usageData.some(u => u.model_quotas?.length)">上游未提供模型级额度数据</div>
           <div class="table-wrap" x-show="usageData.some(u => u.model_quotas?.length)">
             <table>
@@ -539,14 +534,12 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
           <div class="panel-heading">
             <h2 class="card-title">客户端密钥</h2>
             <button type="button" class="btn btn-primary" x-ref="createApiKeyButton" x-show="adminConfigured"
-              :disabled="apiKeysLoading || !!apiKeysError || !!revokingApiKey" @click="openApiKeyDialog()">创建 API Key</button>
+              :disabled="apiKeysLoading || !!apiKeysError || !!revokingApiKey" @click="openApiKeyDialog()">创建密钥</button>
           </div>
-          <p class="text-muted text-sm" x-show="!adminConfigured">请在服务端设置 ADMIN_PASSWORD，重启服务并登录后管理 API Key。</p>
-          <p class="text-muted text-sm" x-show="adminConfigured">为不同应用或设备创建独立密钥。客户端填写生成的 Key，Base URL 使用 <code class="mono" x-text="baseUrl + '/v1'"></code>。</p>
+          <p class="text-muted text-sm" x-show="!adminConfigured">设置 <code class="mono">ADMIN_PASSWORD</code>，重启服务后登录。</p>
           <div class="key-status" x-show="adminConfigured && !apiKeysLoading && !apiKeysError">
-            <span class="badge" :class="apiKeyRequired ? 'badge-ok' : 'badge-gray'" x-text="apiKeyRequired ? '请求需要 API Key' : '当前未启用 API 鉴权'"></span>
-            <span class="text-muted text-sm" x-show="!apiKeyRequired">创建第一把 Key 后，现有客户端也需要配置 Key。</span>
-            <span class="text-muted text-sm" x-show="apiKeyRequired && !apiKeys.some(key => key.status === 'active')">暂无有效 Key。请创建一把以恢复客户端调用。</span>
+            <span class="badge" :class="apiKeyRequired ? 'badge-ok' : 'badge-gray'" x-text="apiKeyRequired ? '已启用 API 鉴权' : '未启用 API 鉴权'"></span>
+            <span class="text-muted text-sm" x-show="apiKeyRequired && apiKeys.length && !apiKeys.some(key => key.status === 'active')">暂无有效密钥</span>
           </div>
           <p class="text-muted text-sm mt-2" x-show="adminConfigured && apiKeysLoading" role="status">正在读取密钥…</p>
           <div class="key-status" x-show="apiKeysError">
@@ -557,7 +550,7 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
             <table>
               <thead><tr><th>名称</th><th>密钥前缀</th><th>状态</th><th>创建时间</th><th>到期时间</th><th>操作</th></tr></thead>
               <tbody>
-                <tr x-show="apiKeys.length===0"><td class="empty" colspan="6">暂无客户端密钥</td></tr>
+                <tr x-show="apiKeys.length===0"><td class="empty" colspan="6" x-text="apiKeyRequired ? '暂无有效密钥' : '暂无客户端密钥'"></td></tr>
                 <template x-for="key in apiKeys" :key="key.id">
                   <tr>
                     <td x-text="key.name"></td>
@@ -585,17 +578,16 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
             <label class="form-label">未在请求中指定模型时使用</label>
             <div class="input-row">
               <select x-model="cfg.default_model">
-                <option value="">自动选择首个可用模型</option>
+                <option value="">自动选择 Codex 模型</option>
                 <option x-show="cfg.default_model && !selectableModels.some(m => m.id === cfg.default_model)"
                   :value="cfg.default_model" x-text="cfg.default_model + '（当前目录中未发现）'"></option>
                 <template x-for="m in selectableModels" :key="m.id">
                   <option :value="m.id" x-text="m.id"></option>
                 </template>
               </select>
-              <button type="button" class="btn" @click="doRefreshModels()" :disabled="loading.models">刷新模型列表</button>
+              <button type="button" class="btn" @click="doRefreshModels()" :disabled="loading.models">刷新探测</button>
             </div>
           </div>
-          <p class="text-muted text-sm">模型目录由 Codex 账号动态提供。选择模型后，客户端请求未填写 model 时将使用此默认值。</p>
         </div>
 
 
@@ -626,7 +618,7 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
   <div class="overlay" x-show="showApiKeyDialog" x-cloak @keydown.escape.window="if (showApiKeyDialog) closeApiKeyDialog()">
     <section class="modal" role="dialog" aria-modal="true" aria-labelledby="key-dialog-title">
       <div class="modal-header">
-        <h2 class="modal-title" id="key-dialog-title" x-text="newApiKey ? '保存 API Key' : '创建 API Key'"></h2>
+        <h2 class="modal-title" id="key-dialog-title" x-text="newApiKey ? '保存密钥' : '创建密钥'"></h2>
         <button type="button" class="modal-close" aria-label="关闭" :disabled="apiKeySaving" @click="closeApiKeyDialog()">×</button>
       </div>
       <form x-show="!newApiKey" @submit.prevent="createApiKey()">
@@ -640,17 +632,19 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
             <option value="30">30 天</option><option value="90">90 天</option><option value="">永不过期</option>
           </select>
         </div>
+        <p class="text-muted text-sm" x-show="!apiKeyRequired">创建后将启用 API 鉴权，现有客户端需配置密钥。</p>
         <div class="modal-footer">
           <button type="button" class="btn" :disabled="apiKeySaving" @click="closeApiKeyDialog()">取消</button>
           <button type="submit" class="btn btn-primary" :disabled="apiKeySaving || !apiKeyName" x-text="apiKeySaving ? '创建中…' : '生成密钥'"></button>
         </div>
       </form>
       <div x-show="newApiKey">
-        <p class="text-muted text-sm">完整密钥只显示一次。请复制并保存到要接入的客户端。</p>
+        <p class="text-muted text-sm">密钥仅显示一次，请复制保存。</p>
         <div class="input-row mt-3">
           <input type="text" class="mono" x-ref="createdApiKey" :value="newApiKey" aria-label="生成的 API Key" readonly @focus="$el.select()">
           <button type="button" class="btn" @click="copyTxt(newApiKey)">复制密钥</button>
         </div>
+        <p class="text-muted text-sm mt-2">客户端 Base URL <code class="mono" x-text="baseUrl + '/v1'"></code></p>
         <div class="modal-footer">
           <button type="button" class="btn btn-primary" @click="closeApiKeyDialog()">完成</button>
         </div>
@@ -680,33 +674,25 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
         <label class="form-label">代理 URL（可选）</label>
         <input type="text" class="mono" x-model="af.proxy" placeholder="如：http://127.0.0.1:7890">
       </div>
-      <div x-show="af.mode==='browser'" class="oauth-login-panel">
-        <div class="oauth-login-title">使用 OpenAI 浏览器登录</div>
-        <div class="oauth-login-desc">将在新浏览器窗口打开官方登录页。登录完成后，账号会自动兑换 Token 并导入到账号列表。</div>
-        <button type="button" class="btn btn-primary" @click="startBrowserOAuthLogin()">打开浏览器登录</button>
-      </div>
+      <button x-show="af.mode==='browser'" type="button" class="btn btn-primary" @click="startBrowserOAuthLogin()">登录 OpenAI</button>
       <div x-show="af.mode==='json'">
         <div class="form-row">
           <label class="form-label">auth.json 内容</label>
-          <textarea x-model="af.authJson" rows="5" placeholder='{"access_token":"sk-...","account_id":"user-...","refresh_token":"..."}'></textarea>
+          <textarea x-model="af.authJson" rows="5"></textarea>
         </div>
       </div>
       <div x-show="af.mode==='manual'">
         <div class="form-row">
           <label class="form-label">Access Token</label>
-          <input type="text" class="mono" x-model="af.access_token" placeholder="sk-...">
+          <input type="text" class="mono" x-model="af.access_token" :placeholder="accountEditIndex !== null ? '留空保持原值' : ''">
         </div>
         <div class="form-row">
           <label class="form-label">Account ID</label>
-          <input type="text" class="mono" x-model="af.account_id" placeholder="user-...">
-        </div>
-        <div class="form-row" x-show="accountEditIndex !== null">
-          <label class="form-label">Access Token（留空保持不变）</label>
-          <input type="text" class="mono" x-model="af.access_token" placeholder="留空保持不变">
+          <input type="text" class="mono" x-model="af.account_id">
         </div>
         <div class="form-row">
-          <label class="form-label" x-text="accountEditIndex !== null ? 'Refresh Token（留空保持不变）' : 'Refresh Token（可选）'"></label>
-          <input type="text" class="mono" x-model="af.refresh_token" :placeholder="accountEditIndex !== null ? '留空保持不变' : '可选'">
+          <label class="form-label" x-text="accountEditIndex !== null ? 'Refresh Token' : 'Refresh Token（可选）'"></label>
+          <input type="text" class="mono" x-model="af.refresh_token" :placeholder="accountEditIndex !== null ? '留空保持原值' : ''">
         </div>
       </div>
       <div class="modal-footer">
@@ -730,13 +716,13 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
       </div>
       
       <div class="form-row">
-        <label class="form-label">上传 TXT 文件（一行一个 Refresh Token）</label>
+        <label class="form-label">从 TXT 读取</label>
         <input type="file" accept=".txt" @change="handleBatchImportFile($event)" style="padding: 6px 0;">
       </div>
       
       <div class="form-row">
-        <label class="form-label">或 直接粘贴 Refresh Tokens（一行一个）</label>
-        <textarea x-model="batchImportText" rows="6" placeholder="输入或粘贴 Refresh Tokens，每行一个..."></textarea>
+        <label class="form-label">Refresh Token（每行一个）</label>
+        <textarea x-model="batchImportText" rows="6"></textarea>
       </div>
 
       <div x-show="batchImportResults && batchImportResults.length > 0" class="form-row" style="max-height: 180px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; padding: 10px; background: #FAF9F6;">
@@ -768,7 +754,6 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
 >
   <div class="modal-box" @click.stop>
     <div class="modal-title">管理员登录</div>
-    <div class="modal-desc">请输入管理员密码以访问管理后台</div>
     <input
       type="password"
       x-model="adminPwd"
@@ -800,15 +785,15 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
     </div>
     <div class="modal-body">
       <div class="form-row">
-        <label class="form-label">预设（可选，自动填端点）</label>
+        <label class="form-label">提供商预设</label>
         <select x-model="pf.preset" @change="applyProviderPreset()">
           <option value="">自定义…</option>
           <template x-for="ps in providerPresets" :key="ps.key"><option :value="ps.key" x-text="ps.label"></option></template>
         </select>
       </div>
       <div class="form-row">
-        <label class="form-label">名称（模型前缀，小写）</label>
-        <input type="text" x-model="pf.name">
+        <label class="form-label">模型前缀</label>
+        <input type="text" x-model="pf.name" placeholder="如 deepseek">
       </div>
       <div class="form-row">
         <label class="form-label">类型</label>
@@ -823,16 +808,15 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
         <input type="text" class="mono" x-model="pf.base_url">
       </div>
       <div class="form-row">
-        <label class="form-label" x-text="pf.index==null ? 'API Key（可多个，每行一个）' : 'API Key（可多个，每行一个；留空保持原值）'"></label>
-        <textarea class="mono" rows="3" x-model="pf.api_key"></textarea>
-        <div class="text-muted text-xs" x-show="providerKeyCount()>1" x-text="'已填 '+providerKeyCount()+' 个 Key：请求自动轮询分摊限额，某个 Key 被拒/超额时自动换下一个'"></div>
+        <label class="form-label">上游 API Key（每行一个）</label>
+        <textarea class="mono" rows="3" x-model="pf.api_key" :placeholder="pf.index==null ? '' : '留空保持原值'"></textarea>
       </div>
       <div class="form-row">
-        <label class="form-label">模型列表（逗号或换行分隔，可留空）</label>
-        <textarea x-model="pf.models" rows="3"></textarea>
-        <button type="button" class="btn btn-sm mt-2" @click="fetchProviderModelsLive()" :class="{'btn-loading':loading.fetchModels}">获取模型列表</button>
+        <label class="form-label">模型列表（可留空）</label>
+        <textarea x-model="pf.models" rows="3" placeholder="每行一个，可填写 别名=上游模型 ID"></textarea>
+        <button type="button" class="btn btn-sm mt-2" @click="fetchProviderModelsLive()" :class="{'btn-loading':loading.fetchModels}">获取模型</button>
       </div>
-      <div class="text-muted text-xs">调用时模型写 <span class="mono">提供商名/模型id</span>（两段）。若上游真实 id 本身带斜杠（如 <span class="mono">deepseek/deepseek-v4.1-flash</span>），在此用 <span class="mono">显示名=真实id</span> 声明，调用时只写 <span class="mono" x-text="pf.name?(pf.name+'/显示名'):'提供商名/显示名'"></span> 即可。</div>
+      <p class="text-muted text-sm">调用格式 <code class="mono" x-text="(pf.name || '前缀') + '/模型ID或别名'"></code></p>
     </div>
     <div class="modal-footer">
       <button type="button" class="btn" @click="showProvider=false">取消</button>
