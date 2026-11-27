@@ -24,6 +24,7 @@ function app() {
         models: [],
         modelsLastProbed: 0,
         modelsCatalogError: '',
+        providerCatalogErrors: [],
         modelsInProgress: false,
         logs: [],
         cfg: { default_model: '', token_refresh_interval_minutes: 60 },
@@ -436,16 +437,22 @@ print(result.data[0].url)`;
             try { this.logs = (await (await fetch('/api/logs')).json()).logs || []; } catch {} finally { this.loading.logs = false; }
         },
         async loadModels() {
+            if (this.loading.models) return;
             this.loading.models = true;
             try {
-                const d = await (await fetch('/api/models')).json();
-                this.models = d.models || [];
-                this.modelsLastProbed = d.lastProbed || 0;
-                this.modelsCatalogError = d.catalogError || '';
-                this.modelsInProgress = d.inProgress === true;
+                const response = await fetch('/api/models');
+                if (response.ok) this.applyModelStatus(await response.json());
             } catch {} finally { this.loading.models = false; }
         },
+        applyModelStatus(status) {
+            this.models = status.models || [];
+            this.modelsLastProbed = status.lastProbed || 0;
+            this.modelsCatalogError = status.catalogError || '';
+            this.providerCatalogErrors = status.providerCatalogErrors || [];
+            this.modelsInProgress = status.inProgress === true;
+        },
         async doRefreshModels(showToast = true) {
+            if (this.loading.models) return;
             this.loading.models = true;
             this.modelsInProgress = true;
             if (showToast) this.toast2('正在获取模型目录并探测可用性…', 'info');
@@ -453,15 +460,11 @@ print(result.data[0].url)`;
                 const r = await fetch('/api/models/refresh', { method: 'POST' });
                 const d = await r.json();
                 if (r.ok) {
-                    this.models = d.models || [];
-                    this.modelsLastProbed = d.lastProbed || 0;
-                    this.modelsCatalogError = d.catalogError || '';
-                    this.modelsInProgress = d.inProgress === true;
-                    const ok = this.models.filter(m => m.available === true).length;
-                    if (showToast && this.modelsCatalogError) {
-                        this.toast2('模型目录获取失败：' + this.modelsCatalogError, 'error');
-                    } else if (showToast) {
-                        this.toast2(`探测完成：${ok}/${this.models.length} 可用`, 'success');
+                    this.applyModelStatus(d);
+                    if (showToast) {
+                        const partial = this.modelsCatalogError || this.providerCatalogErrors.length > 0;
+                        const summary = `可用 ${this.availableModelsCount}，不可用 ${this.unavailableModelsCount}，待确认 ${this.unknownModelsCount}`;
+                        this.toast2(partial ? '部分目录读取失败。' + summary : '探测完成。' + summary, partial ? 'info' : 'success');
                     }
                 } else if (showToast) {
                     this.toast2('探测失败：' + (d.error || ''), 'error');
@@ -998,7 +1001,7 @@ print(result.data[0].url)`;
             if (this.modelQuotaIsEmpty(model.id)) return '不可用';
             if (model.available === true) return '可用';
             if (model.available === false) return '不可用';
-            return '探测中';
+            return this.modelsInProgress ? '探测中' : '待确认';
         },
         modelStatusClass(model) {
             if (this.modelQuotaIsEmpty(model.id) || model.available === false) return 'badge-err';
@@ -1026,6 +1029,10 @@ print(result.data[0].url)`;
                 network_error: '网络错误',
                 no_healthy_account: '没有可用账号',
                 not_probed: '尚未探测',
+                provider_rate_limited: '上游限流或额度不足',
+                provider_catalog_only: '目录发现，声明后可探测',
+                provider_catalog_unsupported: '上游未提供模型目录，请手动声明模型',
+                provider_catalog_empty: '上游未返回模型，请手动声明模型',
             };
             return reason ? (labels[reason] || reason) : '—';
         },

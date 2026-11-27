@@ -34,6 +34,7 @@ import {
   listProviderPresets,
 } from './providers.js';
 import { forwardChatCompletion, fetchProviderModels } from './providerProxy.js';
+import { getProviderModelsStatus, refreshProviderModels } from './providerModels.js';
 import { getAuthorizeUrl, exchangeCodeForToken, startDeviceAuth, pollDeviceAuthOnce } from './oauth.js';
 import { getLocalCodexLoginStatus, startLocalCodexLogin } from './localCodexLogin.js';
 import { isAccountUnavailable, isImageQuotaExhausted } from './accountStatus.js';
@@ -455,20 +456,26 @@ app.get('/v1/models', (req, res) => {
   res.json({ object: 'list', data: [...codex, ...extra] });
 });
 
-app.get('/api/models', (req, res) => {
-  const status = getModelsStatus();
-  // 并入启用提供商的模型（显示名，两段；不参与 Codex 探测）
-  const provModels = listProviderModelIds().map((m) => ({
-    id: m.id, type: 'text', available: true, source: 'provider', provider: m.id.split('/')[0], latency: null, reason: null,
-  }));
-  status.models = [...status.models, ...provModels];
-  res.json(status);
-});
+function combinedModelStatus() {
+  const codex = getModelsStatus();
+  const providers = getProviderModelsStatus();
+  return {
+    ...codex,
+    models: [...codex.models, ...providers.models],
+    lastProbed: Math.max(codex.lastProbed, providers.lastProbed),
+    inProgress: codex.inProgress || providers.inProgress,
+    providerCatalogErrors: providers.errors,
+  };
+}
 
+app.get('/api/models', (req, res) => res.json(combinedModelStatus()));
+
+let modelRefresh = null;
 app.post('/api/models/refresh', async (req, res) => {
   try {
-    const status = await refreshModels();
-    res.json({ ok: true, ...status });
+    modelRefresh ??= Promise.all([refreshModels(), refreshProviderModels()]).finally(() => { modelRefresh = null; });
+    await modelRefresh;
+    res.json({ ok: true, ...combinedModelStatus() });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

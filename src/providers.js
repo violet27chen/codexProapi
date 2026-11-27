@@ -193,6 +193,15 @@ function parseModelEntry(entry) {
   return { display: s, upstream: s };
 }
 
+export function providerModelEntries(provider) {
+  const entries = new Map();
+  for (const entry of Array.isArray(provider.models) ? provider.models : []) {
+    const { display, upstream } = parseModelEntry(entry);
+    if (display && !entries.has(display)) entries.set(display, upstream);
+  }
+  return entries;
+}
+
 export function resolveRouting(model) {
   if (typeof model !== 'string' || !model.includes('/')) return null;
   const enabled = loadRaw().filter((p) => p.enabled !== false);
@@ -202,12 +211,7 @@ export function resolveRouting(model) {
   }
   if (!best) return null;
   const after = model.slice(best.name.length + 1);
-  let upstream = after;
-  for (const entry of (Array.isArray(best.models) ? best.models : [])) {
-    const { display, upstream: real } = parseModelEntry(entry);
-    if (display && display === after) { upstream = real; break; }
-  }
-  return { provider: best, model: upstream };
+  return { provider: best, model: providerModelEntries(best).get(after) ?? after };
 }
 
 /** 供 /v1/models 聚合：把每个启用提供商的模型按“显示名”列出（不含真实 id） */
@@ -215,9 +219,8 @@ export function listProviderModelIds() {
   const out = [];
   for (const p of loadRaw()) {
     if (p.enabled === false) continue;
-    for (const entry of (Array.isArray(p.models) ? p.models : [])) {
-      const { display } = parseModelEntry(entry);
-      if (display) out.push({ id: `${p.name}/${display}`, owned_by: p.type });
+    for (const display of providerModelEntries(p).keys()) {
+      out.push({ id: `${p.name}/${display}`, owned_by: p.type });
     }
   }
   return out;

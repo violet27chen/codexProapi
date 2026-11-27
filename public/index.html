@@ -114,7 +114,7 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
           </div>
           <!-- models actions -->
           <div x-show="page==='models'">
-            <button type="button" class="btn btn-primary" @click="doRefreshModels()" :class="{'btn-loading':loading.models}">
+            <button type="button" class="btn btn-primary" @click="doRefreshModels()" :disabled="loading.models" :class="{'btn-loading':loading.models}">
               <svg x-show="loading.models" class="spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.22-8.56"/></svg>
               刷新探测
             </button>
@@ -300,7 +300,10 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
       <!-- ════ MODELS ════ -->
       <div class="content" x-show="page==='models'" x-cloak>
         <p class="text-muted text-sm" style="margin-bottom:12px" x-show="modelsLastProbed>0" x-text="'上次探测：' + fmtTime(new Date(modelsLastProbed).toISOString())"></p>
-        <p class="text-muted text-sm" style="margin-bottom:12px" x-show="modelsCatalogError" x-text="'模型目录获取失败：' + modelsCatalogError"></p>
+        <p class="text-muted text-sm" style="margin-bottom:12px" x-show="modelsCatalogError" x-text="'Codex 模型目录获取失败：' + modelsCatalogError"></p>
+        <template x-for="issue in providerCatalogErrors" :key="issue.provider">
+          <p class="text-muted text-sm" style="margin-bottom:12px" x-text="issue.provider + ' · ' + modelReasonLabel(issue.reason)"></p>
+        </template>
         <div class="stats-grid mb-3">
           <div class="stat-card">
             <div class="stat-label">可用模型</div>
@@ -319,12 +322,13 @@ window.addEventListener('unhandledrejection', e => console.error('[PROMISE]', e.
         <div class="card">
           <div class="table-wrap">
             <table>
-              <thead><tr><th>模型 ID</th><th>状态</th><th>探测通过 / 已探测账号</th><th>延迟</th><th>原因</th></tr></thead>
+              <thead><tr><th>模型 ID</th><th>来源</th><th>状态</th><th>探测通过 / 已探测账号</th><th>延迟</th><th>原因</th></tr></thead>
               <tbody>
-                <tr x-show="models.length===0"><td colspan="5" class="empty">模型目录会从上游动态获取；点击“刷新探测”重试</td></tr>
-                <template x-for="(m, idx) in models" :key="idx">
+                <tr x-show="models.length===0"><td colspan="6" class="empty">添加 Codex 账号或启用提供商后，点击「刷新探测」。</td></tr>
+                <template x-for="m in models" :key="m.source === 'provider' ? 'provider-' + m.id : 'codex-' + m.id">
                   <tr>
                     <td class="mono" x-text="m.id"></td>
+                    <td x-text="m.provider || 'Codex'"></td>
                     <td>
                       <span class="badge"
                         :class="modelStatusClass(m)"

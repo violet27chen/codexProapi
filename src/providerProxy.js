@@ -297,7 +297,7 @@ const KEY_RETRY_STATUS = new Set([401, 403, 429]);
 /**
  * 主入口：转发一次 chat/completions。body.model 已去前缀；多 Key 时自动轮询并在 Key 级错误时切换重试。
  */
-export async function forwardChatCompletion(provider, body, res) {
+export async function forwardChatCompletion(provider, body, res, { signal } = {}) {
   const model = body.model;
   const stream = body.stream === true;
   const id = `chatcmpl-${randomUUID().replace(/-/g, '')}`;
@@ -311,7 +311,7 @@ export async function forwardChatCompletion(provider, body, res) {
 
     let upstream;
     try {
-      upstream = await fetch(req.url, { method: 'POST', headers: req.headers, body: req.payload });
+      upstream = await fetch(req.url, { method: 'POST', headers: req.headers, body: req.payload, signal });
     } catch (e) {
       return proxyError(res, 502, `转发失败：${e.message}`);
     }
@@ -337,7 +337,7 @@ export async function forwardChatCompletion(provider, body, res) {
  * 一键获取上游真实模型列表（可用于新增/编辑时，未保存也能测）。返回模型 id 字符串数组。
  * 填了多个 Key 时逐个试（某个 Key 无权限/超额则换下一个）。
  */
-export async function fetchProviderModels({ type, base_url, api_key, api_keys } = {}) {
+export async function fetchProviderModels({ type, base_url, api_key, api_keys } = {}, { signal } = {}) {
   if (!base_url) throw new Error('base_url 不能为空');
   const b = String(base_url).replace(/\/+$/, '');
   let url, headers, parse;
@@ -358,7 +358,7 @@ export async function fetchProviderModels({ type, base_url, api_key, api_keys } 
   const attempts = keys.length ? keys : [''];
   let lastErr = null;
   for (let i = 0; i < attempts.length; i++) {
-    const res = await fetch(url, { headers: headers(attempts[i]) });
+    const res = await fetch(url, { headers: headers(attempts[i]), signal });
     const text = await res.text();
     if (res.ok) {
       let json;
@@ -366,6 +366,7 @@ export async function fetchProviderModels({ type, base_url, api_key, api_keys } 
       return parse(json);
     }
     lastErr = new Error(`HTTP ${res.status}: ${text.slice(0, 200)}`);
+    lastErr.status = res.status;
     if (!KEY_RETRY_STATUS.has(res.status) || i === attempts.length - 1) break; // 非 Key 问题或已试完
   }
   throw lastErr || new Error('获取失败');
